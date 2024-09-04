@@ -66,6 +66,7 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const ushort thre
     if (memcode==0) {
         copy_naive(dst, &src[blockBaseIdx + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
     } else if (memcode==1) {
+        __syncthreads(); // avoid race condition
         copy_coalesced16(smem, &src[blockBaseIdx], elemsPerBlock);
         __syncthreads();
         copy_naive(dst, &smem[threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
@@ -81,6 +82,7 @@ __forceinline__  __device__  void store(kT* dst, const kT* src, const ushort thr
         copy_naive(&smem[threadBaseIdx], src, elemsPerThread, reverse); 
         __syncthreads();
         copy_coalesced16(&dst[blockBaseIdx], smem, elemsPerBlock);
+        __syncthreads(); // avoid race condition
     } 
 }
 

@@ -72,6 +72,27 @@ inline void dispatch(auto param, auto &&func, std::string funcname,
                 printParams(paramname, param), "] (dispatch.h).")
 }
 
+
+template <typename T, size_t... Ns>
+constexpr auto product(const std::array<T, Ns>&... arrays) {
+    constexpr size_t cols = sizeof...(Ns);
+    constexpr size_t rows = (Ns *  ...);
+    std::array<std::array<T, cols>, rows> out{};
+
+    // compute cumulative Ns
+    std::array<size_t, cols+1> cumNs = {1, arrays.size()...};
+    for (int i = 1; i < cols+1; i++){
+        cumNs[i] = cumNs[i-1] * cumNs[i];
+    }
+
+    // compute array entries for every row
+    for (size_t row = 0; row < rows; row++) {
+        size_t col = 0;
+        out[row] = std::array{arrays[row / cumNs[col++] % arrays.size()]...};
+    }
+    return out;
+}
+
 /*
 // Non-static types are only supported with C++23 ranges:
 // templated argument needs static storage description,

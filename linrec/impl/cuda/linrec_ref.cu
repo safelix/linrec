@@ -8,7 +8,7 @@
 
 using torch::Tensor;
 
-Tensor linrec_fwd_ref(const Tensor &inputs, const Tensor &coeffs, const bool reverse) {
+Tensor linrec_ref_fwd(const Tensor &inputs, const Tensor &coeffs, const bool reverse) {
     TORCH_CHECK(inputs.sizes() == coeffs.sizes());               // same dimensions
     TORCH_CHECK(inputs.strides() == coeffs.strides());           // same strides
     TORCH_CHECK(inputs.device() == coeffs.device());             // same device
@@ -38,18 +38,18 @@ Tensor linrec_fwd_ref(const Tensor &inputs, const Tensor &coeffs, const bool rev
 
     dispatch<SCALARTYPES>(scalar_t, [&]<auto scalar_t>() {
         using kT = typename c10::impl::ScalarTypeToCPPTypeT<scalar_t>;
-        linrec_fwd_ref_kernel<kT><<<blocks, threads>>>(
+        linrec_ref_fwd_kernel<kT><<<blocks, threads>>>(
                 inputs.data_ptr<kT>(), 
                 coeffs.data_ptr<kT>(), 
                 outputs.data_ptr<kT>(), 
                 seqlen, reverse);
-    }, "linrec_fwd_ref_kernel", "scalar_t"); // name for errors
+    }, "linrec_ref_fwd_kernel", "scalar_t"); // name for errors
 
     return outputs;
 }
 
 
-std::tuple<Tensor, Tensor> linrec_bwd_ref(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse) {
+std::tuple<Tensor, Tensor> linrec_ref_bwd(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse) {
     TORCH_CHECK(d_outputs.sizes() == coeffs.sizes() && coeffs.sizes() == outputs.sizes());                          // same dimensions
     TORCH_CHECK(d_outputs.strides() == coeffs.strides() && coeffs.strides() == outputs.strides());                  // same strides
     TORCH_CHECK(d_outputs.device() == coeffs.device() && coeffs.device() == outputs.device());                      // same device
@@ -80,14 +80,14 @@ std::tuple<Tensor, Tensor> linrec_bwd_ref(const Tensor &d_outputs, const Tensor 
 
     dispatch<SCALARTYPES>(scalar_t, [&]<auto scalar_t>() {
         using kT = typename c10::impl::ScalarTypeToCPPTypeT<scalar_t>;
-        linrec_bwd_ref_kernel<float><<<blocks, threads>>>(
+        linrec_ref_bwd_kernel<float><<<blocks, threads>>>(
                 d_outputs.data_ptr<float>(), 
                 coeffs.data_ptr<float>(), 
                 outputs.data_ptr<float>(), 
                 d_inputs.data_ptr<float>(), 
                 d_coeffs.data_ptr<float>(), 
                 seqlen, reverse);
-    }, "linrec_bwd_ref_kernel", "scalar_t"); // name for errors
+    }, "linrec_ref_bwd_kernel", "scalar_t"); // name for errors
 
     return std::make_tuple(d_inputs, d_coeffs);
 }

@@ -115,7 +115,7 @@ constexpr T ceildiv(T lhs, T rhs){
 
 template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ushort kMaxThreadsPerBlock, int memcode, int algocode>
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
-linrec_fwd_tile_kernel_norev(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen) {
+linrec_tile_fwd_kernel_norev(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen) {
     kT threadAccOutput[kMaxElemsPerThread];
     kT threadAccCoeff[kMaxElemsPerThread];
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
@@ -168,7 +168,7 @@ linrec_fwd_tile_kernel_norev(const kT* inputs, const kT* coeffs, kT* outputs, in
 
 template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ushort kMaxThreadsPerBlock, int memcode, int algocode>
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
-linrec_fwd_tile_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen, const bool rev) {
+linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen, const bool rev) {
     kT threadAccOutput[kMaxElemsPerThread];
     kT threadAccCoeff[kMaxElemsPerThread];
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
@@ -225,7 +225,7 @@ linrec_fwd_tile_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
 
 template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ushort kMaxThreadsPerBlock, int memcode, int algocode>
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
-linrec_bwd_tile_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool rev) {
+linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool rev) {
     kT threadAccDInput[kMaxElemsPerThread];
     kT threadAccCoeff[kMaxElemsPerThread];
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];

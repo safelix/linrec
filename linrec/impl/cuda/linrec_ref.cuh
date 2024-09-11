@@ -6,7 +6,7 @@
 */
 
 template <typename kT>
-__global__ void linrec_fwd_ref_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen) {
+__global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
@@ -19,7 +19,7 @@ __global__ void linrec_fwd_ref_kernel(const kT* inputs, const kT* coeffs, kT* ou
 }
 
 template <typename kT>
-__global__ void linrec_bwd_ref_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen) {
+__global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x + (seqLen - 1); // threads block process channels independently: inputs[seqBaseIdx + i]
@@ -43,7 +43,7 @@ __global__ void linrec_bwd_ref_kernel(const kT* d_outputs, const kT* coeffs, con
 */
 
 template <typename kT>
-__global__ void linrec_fwd_ref_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen, const bool reverse) {
+__global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen, const bool reverse) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
@@ -59,7 +59,7 @@ __global__ void linrec_fwd_ref_kernel(const kT* inputs, const kT* coeffs, kT* ou
 }
 
 template <typename kT>
-__global__ void linrec_bwd_ref_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool reverse) {
+__global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool reverse) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x + (seqLen - 1); // threads block process channels independently: inputs[seqBaseIdx + i]

@@ -45,10 +45,10 @@ int main(int argc, char *argv[]) {
 
     Tensor solution, outputs; 
     
-    solution = linrec_fwd_ref(inputs, coeffs, reverse);
+    solution = linrec_ref_fwd(inputs, coeffs, reverse);
     if (linrec_options.at("algocode") == 0)
         solution = inputs;
-    outputs = linrec_fwd_tile(inputs, coeffs, reverse, linrec_options);
+    outputs = linrec_tile_fwd(inputs, coeffs, reverse, linrec_options);
     std::cout << "outputs: " << outputs.toString() << outputs.sizes();
     std::cout << ", error=" << (solution -  outputs).abs().max().item() << std::endl << std::flush;
     
@@ -57,10 +57,10 @@ int main(int argc, char *argv[]) {
     std::cout << "d_outputs: " << d_outputs.toString() << d_outputs.sizes() << std::endl << std::flush;
 
     /*
-    auto[d_inputs, d_coeffs] = linrec_bwd_ref(d_outputs, coeffs, outputs);    // structured binding
+    auto[d_inputs, d_coeffs] = linrec_ref_bwd(d_outputs, coeffs, outputs);    // structured binding
     std::cout << "d_inputs: " << d_inputs.toString() << d_inputs.sizes() << std::endl;
     std::cout << "d_coeffs: " << d_coeffs.toString() << d_coeffs.sizes() << std::endl;
     */
 
-    //TupleTensor outputs = linrec_bwd_tile(inputs, coeffs);
+    //TupleTensor outputs = linrec_tile_bwd(inputs, coeffs);
 }

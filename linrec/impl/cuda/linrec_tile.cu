@@ -79,7 +79,7 @@ static constexpr auto COMPILEPARAMS = std::array{
 };
 
 
-Tensor linrec_fwd_tile(const Tensor &inputs, const Tensor &coeffs, const bool reverse, const Option& options) {
+Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool reverse, const Option& options) {
     TORCH_CHECK(inputs.sizes() == coeffs.sizes());               // same dimensions
     TORCH_CHECK(inputs.strides() == coeffs.strides());           // same strides
     TORCH_CHECK(inputs.device() == coeffs.device());             // same device
@@ -126,7 +126,7 @@ Tensor linrec_fwd_tile(const Tensor &inputs, const Tensor &coeffs, const bool re
         static constexpr int algocode = params[4];
 
         // select kernel based on compile-time arguments 
-        auto kernel = linrec_fwd_tile_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+        auto kernel = linrec_tile_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
 
         // determine run-time arguments
         int blocks = numseq;
@@ -151,14 +151,14 @@ Tensor linrec_fwd_tile(const Tensor &inputs, const Tensor &coeffs, const bool re
             coeffs.data_ptr<float>(), 
             outputs.data_ptr<float>(), 
             seqlen, reverse);
-    }, "linrec_fwd_tile_kernel", paramnames); // names for errors
+    }, "linrec_tile_fwd_kernel", paramnames); // names for errors
 
     return outputs;
 }
 
 
 
-std::tuple<Tensor, Tensor> linrec_bwd_tile(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse, const Option& options) {
+std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse, const Option& options) {
     TORCH_CHECK(d_outputs.sizes() == coeffs.sizes() && coeffs.sizes() == outputs.sizes());                          // same dimensions
     TORCH_CHECK(d_outputs.strides() == coeffs.strides() && coeffs.strides() == outputs.strides());                  // same strides
     TORCH_CHECK(d_outputs.device() == coeffs.device() && coeffs.device() == outputs.device());                      // same device
@@ -205,7 +205,7 @@ std::tuple<Tensor, Tensor> linrec_bwd_tile(const Tensor &d_outputs, const Tensor
         static constexpr int algocode = params[4];
     
         // select kernel based on compile-time arguments 
-        auto kernel = linrec_bwd_tile_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+        auto kernel = linrec_tile_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
         
         // determine run-time arguments
         int blocks = numseq;
@@ -232,7 +232,7 @@ std::tuple<Tensor, Tensor> linrec_bwd_tile(const Tensor &d_outputs, const Tensor
             d_inputs.data_ptr<float>(), 
             d_coeffs.data_ptr<float>(), 
             seqlen, reverse);
-        }, "linrec_bwd_tile_kernel", paramnames); // names for errors
+        }, "linrec_tile_bwd_kernel", paramnames); // names for errors
 
     return std::make_tuple(d_inputs, d_coeffs);
 }

@@ -11,7 +11,7 @@ __all__ = ["linrec_ref", "linrec_tile"]
 class LinrecRefFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx:FunctionCtx, inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
-        outputs = _C.linrec_fwd_ref(inputs=inputs, coeffs=coeffs, reverse=reverse)
+        outputs = _C.linrec_ref_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
         ctx.save_for_backward(coeffs, outputs)
         ctx.reverse = reverse
         return outputs
@@ -19,7 +19,7 @@ class LinrecRefFn(torch.autograd.Function):
     @staticmethod
     def backward(ctx:FunctionCtx, d_outputs:torch.Tensor):
         coeffs, outputs = ctx.saved_tensors
-        d_inputs, d_coeffs = _C.linrec_bwd_ref(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
+        d_inputs, d_coeffs = _C.linrec_ref_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
         return d_inputs, d_coeffs, None
 
 def linrec_ref(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
@@ -29,7 +29,7 @@ def linrec_ref(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
 class LinrecTileFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx:FunctionCtx, inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
-        outputs = _C.linrec_fwd_tile(inputs=inputs, coeffs=coeffs, reverse=reverse)
+        outputs = _C.linrec_tile_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
         ctx.save_for_backward(coeffs, outputs)
         ctx.reverse = reverse
         return outputs
@@ -37,7 +37,7 @@ class LinrecTileFn(torch.autograd.Function):
     @staticmethod
     def backward(ctx:FunctionCtx, d_outputs:torch.Tensor):
         coeffs, outputs = ctx.saved_tensors
-        d_inputs, d_coeffs = _C.linrec_bwd_tile(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
+        d_inputs, d_coeffs = _C.linrec_tile_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
         return d_inputs, d_coeffs, None
 
 def linrec_tile(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):

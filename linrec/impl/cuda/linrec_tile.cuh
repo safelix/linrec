@@ -276,22 +276,23 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     
     //
     // Compute and Store Coefficient Derivatives (element-wise shifted multiplication) 
-    kT threadShOutput[kMaxElemsPerThread]; 
-    kT threadDCoeff[kMaxElemsPerThread];
+    kT* threadDCoeff = threadAccCoeff; // reuse registers from threadAccCoeff
     
-    // Load outputs shifted to the right (-1) or if reverse shifted to the left (+1) 
-    // - edge case (!rev && threadBaseIdx==0): out of bounds at outputs[-1] => threadShBaseIdx=0, threadShSeqLen=threadSeqLen-1
-    // - edge case (rev && threadBaseIdx==last): out of bounds at outputs[seqLen] => threadShSeqLen=threadSeqLen-1
-    const int threadShBaseIdx = threadBaseIdx + (!rev ? ((threadBaseIdx > 0) ? -1 : 0) : +1);
-    const ushort threadShSeqLen = ((!rev && 0 < threadBaseIdx) || (rev && threadBaseIdx + threadSeqLen < seqLen)) ? threadSeqLen : threadSeqLen-1;
-    
+    // Load outputs shifted to the right (index -1) or if reverse shifted to the left (index +1) 
+    // - edge case for (!rev && threadBaseIdx==first): out of bounds at outputs[-1] => threadShBaseIdx=0, threadShSeqLen=threadSeqLen-1
+    // - edge case for (rev && threadBaseIdx==last): out of bounds at outputs[seqLen] => threadShSeqLen=threadSeqLen-1
+    bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==seqLen);
+    const ushort threadShBaseIdx = threadBaseIdx + (!rev ? (lastThread ? 0:-1) : +1);
+    const ushort threadShSeqLen = threadSeqLen + ((lastThread && threadSeqLen>0) ? -1 : 0);
+
+
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-        threadShOutput[i] = (i < threadShSeqLen) ? outputs[seqBaseIdx + threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i)] : 0;
+        threadDCoeff[i] = (i < threadShSeqLen) ? outputs[seqBaseIdx + threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i)] : 0;
     }
-    memio::load<kT, memcode>(threadShOutput, outputs, threadShBaseIdx, threadShSeqLen, !rev, kT(0), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
+    memio::load<kT, memcode>(threadDCoeff, outputs, threadShBaseIdx, threadShSeqLen, !rev, kT(0), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
     
-    for(ushort i = 0; i < kMaxElemsPerThread; i++) {     // element-wise multiplication
-        threadDCoeff[i] = threadShOutput[i] * threadAccDInput[i];
+    for(ushort i = 0; 0 < algocode && i < kMaxElemsPerThread; i++) {     // element-wise multiplication
+        threadDCoeff[i] *= threadAccDInput[i];
     }
     
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
@@ -299,3 +300,4 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     }
     memio::store<kT, memcode>(d_coeffs, threadDCoeff, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);
 }
+// new line to avoid ptx syntax error "Parsing error near ''"

@@ -110,10 +110,6 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
     int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
 
-    TORCH_CHECK(kMaxElemsPerThread <= (1 << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerThread needs to be smaller than 65536.");
-    TORCH_CHECK(seqlen <= kMaxElemsPerThread * kMaxThreadsPerBlock && "Input sequence is longer than maximum tile size.");
-
-
     // Dispatch templated function: instantiate compile-time parameters
     auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
     auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
@@ -124,6 +120,12 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
         static constexpr int kMaxThreadsPerBlock = params[2];
         static constexpr int memcode = params[3];
         static constexpr int algocode = params[4];
+
+        // check validity of inputs with respect to compile-time arguments
+        static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
+        TORCH_CHECK(seqlen <= kMaxElemsPerTile && "Input sequence is longer than maximum tile size.");
+        TORCH_CHECK(inputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int seqBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerTile needs to be smaller than 65536.");
 
         // select kernel based on compile-time arguments 
         auto kernel = linrec_tile_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
@@ -189,10 +191,6 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
     int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
 
-    TORCH_CHECK(kMaxElemsPerThread <= (1 << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerThread needs to be smaller than 65536.");
-    TORCH_CHECK(seqlen <= kMaxElemsPerThread * kMaxThreadsPerBlock && "Input sequence is longer than maximum tile size.");
-
-
     // Dispatch templated function: instantiate compile-time parameters
     auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
     auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
@@ -203,7 +201,13 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
         static constexpr int kMaxThreadsPerBlock = params[2];
         static constexpr int memcode = params[3];
         static constexpr int algocode = params[4];
-    
+
+        // check validity of inputs with respect to compile-time arguments
+        static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
+        TORCH_CHECK(seqlen <= kMaxElemsPerTile && "Input sequence is longer than maximum tile size.");
+        TORCH_CHECK(d_outputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int seqBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, the kMaxElemsPerTile needs to be smaller than 65536.");
+
         // select kernel based on compile-time arguments 
         auto kernel = linrec_tile_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
         

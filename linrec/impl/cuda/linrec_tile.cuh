@@ -107,7 +107,7 @@ __forceinline__  __device__  void _linrec_scan_tile_parallel_(kT* threadAccOutpu
 }
 
 
-// Helper function 
+// Integer ceiling devision 
 template <typename T>
 constexpr T ceildiv(T lhs, T rhs){
     return ((lhs - 1) / rhs) + 1;
@@ -136,11 +136,11 @@ linrec_tile_fwd_kernel_norev(const kT* inputs, const kT* coeffs, kT* outputs, in
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
-    const int threadTailId = threadId - (numThreads - numTailThreads);                              // tail start indicated by ..., 0, 1, 2, ...
+    const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
-    const int threadBaseIdx = threadId * elemsPerThread - max(threadTailId, 0);                     // base index to process by every thread
+    const ushort threadBaseIdx = threadId * elemsPerThread - max(threadTailId, 0);                     // base index to process by every thread
 
-    assert((threadId==numThreads-1) ? (seqBaseIdx + seqLen == seqBaseIdx + threadBaseIdx + threadSeqLen) : true && "Error in threadBaseIdx or threadSeqLen computation.");
+    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
 
 
     // Load inputs and coeffs of tile into thread-local arrays
@@ -189,15 +189,14 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
-    const int threadTailId = threadId - (numThreads - numTailThreads);                              // tail start indicated by ..., 0, 1, 2, ...
+    const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
-    const int threadBaseIdx = !rev ? (threadId * elemsPerThread - max(threadTailId, 0)) :                     // base index to process by every thread
-                                    ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)); // reverse ordered base index
+    const ushort threadBaseIdx = !rev ? (threadId * elemsPerThread - max(threadTailId, 0)) :                    // base index to process by every thread
+                                    ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0));   // reverse ordered base index
 
-    assert((!rev && threadId==numThreads-1) ? (seqBaseIdx + seqLen == seqBaseIdx + threadBaseIdx + threadSeqLen) : true && "Error in threadBaseIdx or threadSeqLen computation.");
-    assert((rev && threadId==0) ? (seqBaseIdx + seqLen == seqBaseIdx + threadBaseIdx + threadSeqLen) : true && "Error in threadBaseIdx or threadSeqLen computation.");
+    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
 
-
+    
     // Load inputs and coeffs of tile into thread-local arrays
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
         threadAccOutput[i] = (i < threadSeqLen) ? inputs[seqBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] : 0;
@@ -212,7 +211,6 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
         _linrec_scan_tile_parallel_<kT, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccOutput, threadAccCoeff, kMaxElemsPerThread, laneId, thisWarpSize, warpId, numWarps, numThreads);
     }
 
-    //
     // Store outputs
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
         outputs[seqBaseIdx + threadBaseIdx + (!rev ? i : (threadSeqLen-1-i))] = threadAccOutput[i];
@@ -246,13 +244,12 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently in reverse: inputs[seqBaseIdx-i]
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
-    const int threadTailId = threadId - (numThreads - numTailThreads);                              // tail start indicated by ..., 0, 1, 2, ...
+    const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
-    const int threadBaseIdx = !rev ? ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)) : // backwards ordered base index to process by every thread
-                                    ((threadId * elemsPerThread - max(threadTailId, 0)));                       // forward ordered base index
+    const ushort threadBaseIdx = !rev ? ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)) :  // backwards ordered base index to process by every thread
+                                    ((threadId * elemsPerThread - max(threadTailId, 0)));                           // forward ordered base index
 
-    assert((!rev && threadId==0) ? (seqBaseIdx + seqLen == seqBaseIdx + threadBaseIdx + threadSeqLen) : true && "Error in threadBaseIdx or threadSeqLen computation.");
-    assert((rev && threadId==numThreads-1) ? (seqBaseIdx + seqLen == seqBaseIdx + threadBaseIdx + threadSeqLen) : true && "Error in threadBaseIdx or threadSeqLen computation.");
+    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
 
 
     // Load inputs and coeffs of tile into thread-local arrays
@@ -270,15 +267,14 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         _linrec_scan_tile_parallel_<kT, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccDInput, threadAccCoeff, kMaxElemsPerThread, laneId, thisWarpSize, warpId, numWarps, numThreads);
     }
 
-
-    //
     // Store outputs of Back Propoagation Through Time
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
         d_inputs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadAccDInput[i];
     }
     memio::store<kT, memcode>(d_inputs, threadAccDInput, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);
     
-
+    
+    //
     // Compute and Store Coefficient Derivatives (element-wise shifted multiplication) 
     kT threadShOutput[kMaxElemsPerThread]; 
     kT threadDCoeff[kMaxElemsPerThread];
@@ -301,7 +297,5 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
         d_coeffs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadDCoeff[i];
     }
-    memio::store<kT, memcode>(d_coeffs, threadDCoeff, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);    
-    
-    return;
+    memio::store<kT, memcode>(d_coeffs, threadDCoeff, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);
 }

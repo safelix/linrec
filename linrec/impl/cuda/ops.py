@@ -44,6 +44,24 @@ def linrec_tile(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
     return LinrecTileFn.apply(inputs, coeffs, reverse)
 
 
+class LinrecPipeFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx:FunctionCtx, inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
+        outputs = _C.linrec_pipe_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
+        ctx.save_for_backward(coeffs, outputs)
+        ctx.reverse = reverse
+        return outputs
+    
+    @staticmethod
+    def backward(ctx:FunctionCtx, d_outputs:torch.Tensor):
+        coeffs, outputs = ctx.saved_tensors
+        d_inputs, d_coeffs = _C.linrec_pipe_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
+        return d_inputs, d_coeffs, None
+
+def linrec_pipe(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
+    return LinrecPipeFn.apply(inputs, coeffs, reverse)
+
+
 
 # TODO: https://pytorch.org/tutorials/advanced/custom_ops_landing_page.html#why-should-i-create-a-custom-operator
 # Q: Why should I create a Custom Operator?

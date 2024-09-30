@@ -43,19 +43,53 @@ __forceinline__  __device__  void copy_coalesced(kT* dst, const kT* src, const c
     }
 }
 
-
 template <typename kT, typename count_t>
 __forceinline__  __device__  void copy_coalesced16(kT* dst, const kT* src, const count_t elemsPerBlock) {
     const ushort numThreads = blockDim.x;
     const ushort threadId = threadIdx.x; // TODO: compute real threadIdx.z threadIdx.y 
 
     const ushort k = 16 / sizeof(kT);        // num elements in vectorized loads/stores of 16 byte words
-    struct alignas(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
-    assert(elemsPerBlock % k == 0 && "Seqlen needs to be a multiple of 16/sizeof(kT) for alignment");
-    //assert(&src[0] % 16 > 0 && "Seqlen needs to be a multiple of 16/sizeof(kT) for alignment");
-    
-    for (count_t i = k*threadId; i < elemsPerBlock; i += k*numThreads) {
+    struct __align__(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
+    assert((long)  dst % 16 == 0 && "Dst needs to be a multiple of 16 for alignment");
+    assert((long) src % 16 == 0 && "Src needs to be a multiple of 16 for alignment");
+
+    // copy as vectors so long as they fit into elemsPerBlock
+    count_t elemsPerBlockVec = elemsPerBlock - (elemsPerBlock % k);
+    for (count_t i = k*threadId; i < elemsPerBlockVec; i += k*numThreads) {
         *reinterpret_cast<vec*>(&dst[i]) = *reinterpret_cast<const vec*>(&src[i]);
+    }
+
+    // copy elementwise until elemsPerBlock is reached
+    for (count_t i = elemsPerBlockVec + threadId; i < elemsPerBlock; i += numThreads) {
+        dst[i] = src[i]; 
+    }
+}
+
+template <typename kT, typename count_t>
+__forceinline__  __device__  void copy_coalesced16(kT* dst, const kT* src, const count_t elemsPerBlock, const ushort align) {
+    const ushort numThreads = blockDim.x;
+    const ushort threadId = threadIdx.x; // TODO: compute real threadIdx.z threadIdx.y 
+
+    const ushort k = 16 / sizeof(kT);        // num elements in vectorized loads/stores of 16 byte words
+    struct __align__(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
+
+    // copy elementwise until dst[i] and src[i] are aligned
+    assert(((long) &src[align] % 16 == 0) && "Dst is not aligned." );
+    assert(((long) &dst[align] % 16 == 0) && "Src is not aligned." );
+
+    for (count_t i = threadId; i < align; i += numThreads) {
+        dst[i] = src[i];
+    }
+
+    // copy as vectors so long as they fit into elemsPerBlock
+    count_t elemsPerBlockVec = elemsPerBlock - ((elemsPerBlock - align) % k);
+    for (count_t i = align + k*threadId; i < elemsPerBlockVec; i += k*numThreads) {
+        *reinterpret_cast<vec*>(&dst[i]) = *reinterpret_cast<const vec*>(&src[i]);
+    }
+
+    // copy elementwise until elemsPerBlock is reached
+    for (count_t i = elemsPerBlockVec + threadId; i < elemsPerBlock; i += numThreads) {
+        dst[i] = src[i]; 
     }
 }
 
@@ -71,7 +105,9 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const ushort thre
         copy_naive(dst, &smem[threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
     } else if (memcode==2) {
         __syncthreads(); // avoid race condition
-        copy_coalesced16(&smem[offset], &src[blockBaseIdx], elemsPerBlock);
+        ushort offset = ((long) &src[blockBaseIdx] % 16) / sizeof(kT);
+        ushort align = 16 / sizeof(kT) - offset;
+        copy_coalesced16(&smem[offset], &src[blockBaseIdx], elemsPerBlock, align);
         __syncthreads();
         copy_naive(dst, &smem[offset + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
     }

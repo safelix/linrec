@@ -5,16 +5,15 @@
 #include <linrec.h>
 #include <dispatch.h>
 #include <cuhelpers.cuh>
-#include <linrec_tile.cuh>
+#include <linrec_pipe.cuh>
 
 using torch::Tensor;
-
 using Option = std::map<std::string, int>;
 inline int get(const Option& option, const std::string key, int default_value) {   
     return option.contains(key) ? option.at(key) : default_value;
 }
 
-Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool reverse, const Option& options) {
+Tensor linrec_pipe_fwd(const Tensor &inputs, const Tensor &coeffs, const bool reverse, const Option& options) {
     TORCH_CHECK(inputs.sizes() == coeffs.sizes());               // same dimensions
     TORCH_CHECK(inputs.strides() == coeffs.strides());           // same strides
     TORCH_CHECK(inputs.device() == coeffs.device());             // same device
@@ -58,17 +57,17 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
-        TORCH_CHECK(seqlen <= kMaxElemsPerTile && "Input sequence is longer than maximum tile size.");
-        TORCH_CHECK(inputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int seqBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int remainingElems, sequence needs to be shorter than 2147483647.");
+        TORCH_CHECK(inputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, numel() needs to be smaller than 2147483647.");
         TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerTile needs to be smaller than 65536.");
 
         // select kernel based on compile-time arguments 
-        auto kernel = linrec_tile_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+        auto kernel = linrec_pipe_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
 
         // determine run-time arguments
         int blocks = numseq;
         int threads = kMaxThreadsPerBlock; // TODO: std::min(seqlen, kMaxThreadsPerBlock);
-        int smem = (memcode > 0) ? seqlen * sizeof(float) : 0;
+        int smem = (memcode > 0) ? std::min(seqlen, kMaxElemsPerThread * threads) * sizeof(float) : 0;
 
         // configure kernel run-time properties: 
         // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
@@ -88,14 +87,14 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
             coeffs.data_ptr<float>(), 
             outputs.data_ptr<float>(), 
             seqlen, reverse);
-    }, "linrec_tile_fwd_kernel", paramnames); // names for errors
+    }, "linrec_pipe_fwd_kernel", paramnames); // names for errors
 
     return outputs;
 }
 
 
 
-std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse, const Option& options) {
+std::tuple<Tensor, Tensor> linrec_pipe_bwd(const Tensor &d_outputs, const Tensor &coeffs, const Tensor &outputs, bool reverse, const Option& options) {
     TORCH_CHECK(d_outputs.sizes() == coeffs.sizes() && coeffs.sizes() == outputs.sizes());                          // same dimensions
     TORCH_CHECK(d_outputs.strides() == coeffs.strides() && coeffs.strides() == outputs.strides());                  // same strides
     TORCH_CHECK(d_outputs.device() == coeffs.device() && coeffs.device() == outputs.device());                      // same device
@@ -139,17 +138,17 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
-        TORCH_CHECK(seqlen <= kMaxElemsPerTile && "Input sequence is longer than maximum tile size.");
-        TORCH_CHECK(d_outputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int seqBaseIdx, numel() needs to be smaller than 2147483647.");
-        TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, the kMaxElemsPerTile needs to be smaller than 65536.");
+        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int remainingElems, sequence needs to be shorter than 2147483647.");
+        TORCH_CHECK(d_outputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerTile needs to be smaller than 65536.");
 
         // select kernel based on compile-time arguments 
-        auto kernel = linrec_tile_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+        auto kernel = linrec_pipe_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
         
         // determine run-time arguments
         int blocks = numseq;
         int threads = kMaxThreadsPerBlock; // TODO: std::min(seqlen, kMaxThreadsPerBlock);
-        int smem = (memcode > 0) ? seqlen * sizeof(float) : 0;
+        int smem = (memcode > 0) ? std::min(seqlen, kMaxElemsPerThread * threads) * sizeof(float) : 0;
 
         // configure kernel run-time properties: 
         // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
@@ -171,13 +170,13 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
             d_inputs.data_ptr<float>(), 
             d_coeffs.data_ptr<float>(), 
             seqlen, reverse);
-        }, "linrec_tile_bwd_kernel", paramnames); // names for errors
+        }, "linrec_pipe_bwd_kernel", paramnames); // names for errors
 
     return std::make_tuple(d_inputs, d_coeffs);
 }
 
 
-std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& options) {
+std::map<std::string, int> linrec_pipe_attrs(const bool fwd, const Option& options) {
     
     // Unpack and determine compile-time arguments
     // TODO: make sure that all keys are in {"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock",  "memcode", "algocode"}
@@ -203,14 +202,15 @@ std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& optio
     
         // select kernel based on compile-time arguments
         if (fwd) {
-            auto kernel = linrec_tile_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+            auto kernel = linrec_pipe_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
             attrs = cudaFuncGetAttributes(kernel);
         } else {
-            auto kernel = linrec_tile_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+            auto kernel = linrec_pipe_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
             attrs = cudaFuncGetAttributes(kernel);
         }
     
-    }, "linrec_tile_attrs", paramnames); // names for errors
+    }, "linrec_pipe_attrs", paramnames); // names for errors
+
 
     return cudaFuncAttributesAsMap(attrs);
 }

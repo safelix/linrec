@@ -9,7 +9,7 @@ PKG_DIR = Path(__file__).parents[3]
 BUILD_DIR = PKG_DIR / ".build"
 
 ### CUDA/C++ Compilation Arguments
-LIB_SOURCES = [str(SRC_DIR / "linrec_ref.cu"), str(SRC_DIR / "linrec_tile.cu")]
+LIB_SOURCES = [str(SRC_DIR / "linrec_ref.cu"), str(SRC_DIR / "linrec_tile.cu"), str(SRC_DIR / "linrec_pipe.cu")]
 EXT_SOURCES = [str(SRC_DIR / "extension.cpp")]
 EXE_SOURCES = [str(SRC_DIR / "executable.cpp")]
 INCLUDES = [str(SRC_DIR)]

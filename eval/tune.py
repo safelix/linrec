@@ -44,7 +44,7 @@ if __name__ == '__main__':
     from functools import partial
 
     parser = ArgumentParser()
-    impls = ['linrec_tile_fwd', 'linrec_tile_bwd']
+    impls = ['linrec_tile_fwd', 'linrec_tile_bwd', 'linrec_pipe_bwd', 'linrec_pipe_bwd']
     parser.add_argument('impl', choices=impls, help='Which implementation to tune.')
     parser.add_argument('--seqlen_min', type=int, default=4, help='Minimal sequence length to tune with.')
     parser.add_argument('--seqlen_max', type=int, default=14, help='Maximal sequence length to tune with.')

@@ -37,7 +37,6 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
     int numseq = inputs.numel() / seqlen;       // the number of sequences over batches, channels, etc
 
     // Unpack and determine compile-time arguments
-    // TODO: make sure that all keys are in {"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"}
     int memcode = get(options, "memcode", 0);
     int algocode = get(options, "algocode", 3);
 
@@ -45,16 +44,15 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
     int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
 
-    // Dispatch templated function: instantiate compile-time parameters
-    auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
-    auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
+    // Dispatch templated function: instantiate compile-time configuration
+    auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
 
-    dispatch<COMPILEPARAMS>(params, [&]<auto params>() {
-        static constexpr int kMaxElemsPerThread = params[0];
-        static constexpr int kMaxThreadsPerWarp = params[1];
-        static constexpr int kMaxThreadsPerBlock = params[2];
-        static constexpr int memcode = params[3];
-        static constexpr int algocode = params[4];
+    dispatch<CONFIG_LIST>(config, [&]<auto config>() {
+        static constexpr int kMaxElemsPerThread = config[0];
+        static constexpr int kMaxThreadsPerWarp = config[1];
+        static constexpr int kMaxThreadsPerBlock = config[2];
+        static constexpr int memcode = config[3];
+        static constexpr int algocode = config[4];
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
@@ -88,7 +86,7 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
             coeffs.data_ptr<float>(), 
             outputs.data_ptr<float>(), 
             seqlen, reverse);
-    }, "linrec_tile_fwd_kernel", paramnames); // names for errors
+    }, "linrec_tile_fwd_kernel", CONFIG_NAMES); // names for errors
 
     return outputs;
 }
@@ -118,7 +116,6 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
     const int numseq = d_outputs.numel() / seqlen; // the number of sequences over batches, channels, etc
 
     // Unpack and determine compile-time arguments
-    // TODO: make sure that all keys are in {"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock",  "memcode", "algocode"}
     int memcode = get(options, "memcode", 0);
     int algocode = get(options, "algocode", 3);
 
@@ -126,16 +123,15 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
     int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
 
-    // Dispatch templated function: instantiate compile-time parameters
-    auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
-    auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
+    // Dispatch templated function: instantiate compile-time configuration
+    auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
     
-    dispatch<COMPILEPARAMS>(params, [&]<auto params>() {
-        static constexpr int kMaxElemsPerThread = params[0];
-        static constexpr int kMaxThreadsPerWarp = params[1];
-        static constexpr int kMaxThreadsPerBlock = params[2];
-        static constexpr int memcode = params[3];
-        static constexpr int algocode = params[4];
+    dispatch<CONFIG_LIST>(config, [&]<auto config>() {
+        static constexpr int kMaxElemsPerThread = config[0];
+        static constexpr int kMaxThreadsPerWarp = config[1];
+        static constexpr int kMaxThreadsPerBlock = config[2];
+        static constexpr int memcode = config[3];
+        static constexpr int algocode = config[4];
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
@@ -171,7 +167,7 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
             d_inputs.data_ptr<float>(), 
             d_coeffs.data_ptr<float>(), 
             seqlen, reverse);
-        }, "linrec_tile_bwd_kernel", paramnames); // names for errors
+        }, "linrec_tile_bwd_kernel", CONFIG_NAMES); // names for errors
 
     return std::make_tuple(d_inputs, d_coeffs);
 }
@@ -188,18 +184,17 @@ std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& optio
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
     int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
 
-    // Dispatch templated function: instantiate compile-time parameters
-    auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
-    auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
+    // Dispatch templated function: instantiate compile-time configuration
+    auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
     
     cudaFuncAttributes attrs;
 
-    dispatch<COMPILEPARAMS>(params, [&]<auto params>() {
-        static constexpr int kMaxElemsPerThread = params[0];
-        static constexpr int kMaxThreadsPerWarp = params[1];
-        static constexpr int kMaxThreadsPerBlock = params[2];
-        static constexpr int memcode = params[3];
-        static constexpr int algocode = params[4];
+    dispatch<CONFIG_LIST>(config, [&]<auto config>() {
+        static constexpr int kMaxElemsPerThread = config[0];
+        static constexpr int kMaxThreadsPerWarp = config[1];
+        static constexpr int kMaxThreadsPerBlock = config[2];
+        static constexpr int memcode = config[3];
+        static constexpr int algocode = config[4];
     
         // select kernel based on compile-time arguments
         if (fwd) {
@@ -210,7 +205,7 @@ std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& optio
             attrs = cudaFuncGetAttributes(kernel);
         }
     
-    }, "linrec_tile_attrs", paramnames); // names for errors
+    }, "linrec_tile_attrs", CONFIG_NAMES); // names for errors
 
     return cudaFuncAttributesAsMap(attrs);
 }

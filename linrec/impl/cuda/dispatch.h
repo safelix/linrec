@@ -7,22 +7,21 @@
 #include <c10/util/Exception.h>
 
     
-/*  Dispatch templated function: instantiate compile-time parameters
+/*  Dispatch templated function: instantiate compile-time configuration
 
-    auto paramnames = std::array{"scalar_t", "myparam"};
-    auto params = std::array{ScalarTypeToNum(inputs.scalar_type()), 0};
-    std::cin >> params[1];
+    auto config = std::array{ScalarTypeToNum(inputs.scalar_type()), 0};
+    std::cin >> config[1];
 
-    static constexpr auto COMPILEPARAMS = std::array{
+    static constexpr auto CONFIG_LIST = std::array{
         std::array{int(ScalarType::Float), 1},
         std::array{int(ScalarType::Float), 16},
         std::array{int(ScalarType::Int), 16},
         std::array{int(ScalarType::Int), 32},
     }
 
-    dispatch<COMPILEPARAMS>(params, [&]<auto params>() {
-        using T = typename NumToCppType<params[0]>;
-        static constexpr myparam = params[1];
+    dispatch<CONFIG_LIST>(config, [&]<auto config>() {
+        using T = typename NumToCppType<config[0]>;
+        static constexpr myparam = config[1];
 
         mytemplatedfunc<T, myparam><<<blocks, threads>>>( 
                 inputs.data_ptr<T>(),
@@ -34,14 +33,14 @@ Inspired by: https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/Dispatch
 */
 
 template <typename T1, typename T2>
-std::string printParams(T1 name, T2 value) {
+std::string printConfig(T1 name, T2 value) {
   std::stringstream ss;
   ss << name << value;
   return ss.str();
 }
 
 template <typename T1, typename T2, size_t N1, size_t N2>
-std::string printParams(std::array<T1, N1> names, std::array<T2, N2> values) {
+std::string printConfig(std::array<T1, N1> names, std::array<T2, N2> values) {
   std::stringstream ss;
   for (int i = 0; i < values.size(); i++) {
     if (i < names.size()) ss << names[i] << "=";
@@ -51,25 +50,25 @@ std::string printParams(std::array<T1, N1> names, std::array<T2, N2> values) {
   return ss.str();
 }
 
-template <std::array COMPILEPARAMS, std::size_t I = 0>
-inline void dispatch(auto param, auto &&func, std::string funcname,
-                     auto paramname) {
-  static constexpr auto PARAM = COMPILEPARAMS[I];
-  static_assert(std::is_same_v<std::remove_cvref_t<decltype(PARAM)>, std::remove_cvref_t<decltype(param)>>,
-      "COMPILEPARAMS[i] and param must have same type (Note: COMPILEPARAMS might get flattened if it contains only one param).");
+template <std::array CONFIG_LIST, std::size_t I = 0>
+inline void dispatch(auto config, auto &&func, std::string funcname,
+                     auto config_names) {
+  static constexpr auto CONFIG = CONFIG_LIST[I];
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(CONFIG)>, std::remove_cvref_t<decltype(config)>>,
+      "CONFIG_LIST[i] and config must have same type (Note: CONFIG_LIST might get flattened if it contains only one config).");
 
-  if (PARAM == param) {
-    func.template operator()<PARAM>();  // call with compile-time param
+  if (CONFIG == config) {
+    func.template operator()<CONFIG>();  // call with compile-time config
     return;
   }
 
-  if constexpr (I + 1 < COMPILEPARAMS.size()) {
-    dispatch<COMPILEPARAMS, I + 1>(param, func, funcname, paramname);
+  if constexpr (I + 1 < CONFIG_LIST.size()) {
+    dispatch<CONFIG_LIST, I + 1>(config, func, funcname, config_names);
     return;
   }
 
-  TORCH_CHECK_NOT_IMPLEMENTED(false, "'", funcname, "' is not compiled for template parameters [",
-                printParams(paramname, param), "] (dispatch.h).")
+  TORCH_CHECK_NOT_IMPLEMENTED(false, "'", funcname, "' is not compiled for compile-time configuration [",
+                printConfig(config_names, config), "] (dispatch.h).")
 }
 
 
@@ -113,23 +112,23 @@ constexpr auto concat(const std::array<T, Ns> &...arrays) {
 // Non-static types are only supported with C++23 ranges:
 // templated argument needs static storage description,
 // but 'static' in constexpr function is only supported in c++23.
-template <auto &COMPILEPARAMS>
-constexpr void dispatch(auto &param, auto &&func) {
+template <auto &CONFIG_LIST>
+constexpr void dispatch(auto &config, auto &&func) {
 
-    static constexpr auto PARAM = *std::ranges::begin(COMPILEPARAMS);
-    static constexpr auto TAIL = COMPILEPARAMS | std::views::drop(1);
+    static constexpr auto CONFIG = *std::ranges::begin(CONFIG_LIST);
+    static constexpr auto TAIL = CONFIG_LIST | std::views::drop(1);
 
-    if (PARAM == param) {
-        func.template operator()<PARAM>(); // call with compile-time param
+    if (CONFIG == config) {
+        func.template operator()<CONFIG>(); // call with compile-time config
         return;
     }
 
-    if constexpr (std::ranges::size(COMPILEPARAMS) > 1) {
-        dispatch<TAIL>(param, func);
+    if constexpr (std::ranges::size(CONFIG_LIST) > 1) {
+        dispatch<TAIL>(config, func);
         return;
     }
 
-    TORCH_CHECK_NOT_IMPLEMENTED(false, "'", funcname, "' is not compiled for template parameters [",
-                printParams(paramname, param), "] (dispatch.h).")}
+    TORCH_CHECK_NOT_IMPLEMENTED(false, "'", funcname, "' is not compiled for compile-time configuration [",
+                printConfig(config_names, config), "] (dispatch.h).")}
 */
 

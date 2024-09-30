@@ -5,7 +5,8 @@
 #include <tuple>
 #include <dispatch.h>
 
-static constexpr auto COMPILEPARAMS = concat(
+static constexpr auto CONFIG_NAMES = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
+static constexpr auto CONFIG_LIST = concat(
     //product(std::array{16}, std::array{32}, std::array{1024}, std::array{-1, 0, 1, 2}, std::array{0, 3}) // debug
     product(std::array{16}, std::array{32}, std::array{32, 1024}, std::array{-1}, std::array{0, 1, 2, 3}), // demo algo
     product(std::array{4, 8, 16}, std::array{32}, std::array{32, 64, 128, 256, 512, 1024}, std::array{0, 1, 2}, std::array{0, 3})  // tuning

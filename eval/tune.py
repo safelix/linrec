@@ -79,11 +79,10 @@ if __name__ == '__main__':
     # Prepare Statements
     func = partial(getattr(_C, args.impl), reverse=args.reverse)
     ref =  partial(getattr(_C, f'linrec_ref_{args.impl[-3:]}'), reverse=args.reverse)
-    names = ["kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"]
 
     index, stmts = [], []
-    for p in _C.COMPILEPARAMS:
-        kwargs = dict(zip(names, p))
+    for p in _C.config_list:
+        kwargs = dict(zip(_C.config_names, p))
 
         index_key, drop_stmt = {}, False
         for arg in kwargs:

@@ -41,7 +41,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
                 py::arg("d_outputs"), py::arg("coeffs"), py::arg("outputs"), py::arg("reverse")=false);
 
     
-    m.attr("COMPILEPARAMS") = py::cast(COMPILEPARAMS);
+    m.attr("config_list") = py::cast(CONFIG_LIST);
+    m.attr("config_names") = py::cast(CONFIG_NAMES);
     m.def("linrec_tile_fwd", torch::wrap_pybind_function(cast_kwarg(linrec_tile_fwd)), 
                 "Parallel CUDA implementation of linear recursion forward pass.",
                 py::arg("inputs"), py::arg("coeffs"), py::arg("reverse")=false);

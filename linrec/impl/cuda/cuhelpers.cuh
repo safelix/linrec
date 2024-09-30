@@ -5,20 +5,41 @@
 
 /**************************** CUDA Runtime Helpers ***************************/
 
-int cudaDeviceGetAttribute(cudaDeviceAttr attr, int device){
+inline int cudaDeviceGetAttribute(cudaDeviceAttr attr, int device){
     int value;
     cudaDeviceGetAttribute(&value, attr, device);
     return value;
 }
 
 template<class T>
-cudaFuncAttributes cudaFuncGetAttributes(T* entry){
-    cudaFuncAttributes attr;
-    cudaFuncGetAttributes(&attr, entry);
-    return attr;
+inline cudaFuncAttributes cudaFuncGetAttributes(T* entry){
+    cudaFuncAttributes attrs;
+    cudaFuncGetAttributes(&attrs, entry);
+    return attrs;
 }
 
-std::ostream& operator<<(std::ostream& os, cudaFuncAttributes attr)
+inline std::map<std::string, int> cudaFuncAttributesAsMap(const cudaFuncAttributes &attrs){
+    std::map<std::string, int> map;
+    map["sharedSizeBytes"] = attrs.sharedSizeBytes; 
+    map["constSizeBytes"] = attrs.constSizeBytes;
+    map["localSizeBytes"] = attrs.localSizeBytes;
+    map["maxThreadsPerBlock"] = attrs.maxThreadsPerBlock;
+    map["numRegs"] = attrs.numRegs; 
+    map["ptxVersion"] = attrs.ptxVersion;
+    map["binaryVersion"] = attrs.binaryVersion;
+    map["cacheModeCA"] = attrs.cacheModeCA;
+    map["maxDynamicSharedSizeBytes"] = attrs.maxDynamicSharedSizeBytes;
+    map["preferredShmemCarveout"] = attrs.preferredShmemCarveout;
+    map["clusterDimMustBeSet"] = attrs.clusterDimMustBeSet;
+    map["requiredClusterWidth"] = attrs.requiredClusterWidth;
+    map["requiredClusterHeight"] = attrs.requiredClusterHeight;
+    map["requiredClusterDepth"] = attrs.requiredClusterDepth;
+    map["clusterSchedulingPolicyPreference"] = attrs.clusterSchedulingPolicyPreference;
+    map["nonPortableClusterSizeAllowed"] = attrs.nonPortableClusterSizeAllowed;
+    return map;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const cudaFuncAttributes attr)
 {
    return os << "cudaFuncAttributes[" << std::endl <<
             "    sharedSizeBytes=" << attr.sharedSizeBytes << std::endl << 
@@ -38,4 +59,4 @@ std::ostream& operator<<(std::ostream& os, cudaFuncAttributes attr)
             "    clusterSchedulingPolicyPreference=" << attr.clusterSchedulingPolicyPreference << std::endl <<
             "    nonPortableClusterSizeAllowed=" << attr.nonPortableClusterSizeAllowed << std::endl <<
             "]";
-};
+}; 

@@ -21,6 +21,7 @@ CUDA_FLAGS = [
     #"--device-debug",                          # Generate debug information for device code.
     "--generate-line-info",                     # Generate line-number information for device code.
     "-O3",                                      # Specify optimization level for host code.
+    #'--ftemplate-depth 199',                   # Set the maximum instantiation depth for template classes to <limit> (default 199).
     "-std=c++20",                               # Select a particular C++ dialect
     #'--expt-relaxed-constexpr',                # Experimental flag: Allow host code to invoke __device__ constexpr functions
 

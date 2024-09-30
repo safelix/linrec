@@ -4,9 +4,8 @@
 
 #include <linrec.h>
 #include <dispatch.h>
+#include <cuhelpers.cuh>
 #include <linrec_tile.cuh>
-#include <memio.cuh>
-#include <utils.cuh>
 
 using torch::Tensor;
 
@@ -14,70 +13,6 @@ using Option = std::map<std::string, int>;
 int get(const Option& option, const std::string key, int default_value) {   
     return option.contains(key) ? option.at(key) : default_value;
 }
-
-static constexpr auto COMPILEPARAMS = std::array{
-    // debug algo: kMaxElemsPerThread=32, memcode=-1
-    std::array{16, 32, 32, -1, 0},
-    std::array{16, 32, 32, -1, 1},
-    std::array{16, 32, 32, -1, 2},
-    std::array{16, 32, 32, -1, 3},
-
-    // debug algo: kMaxElemsPerThread=1024, memcode=-1
-    std::array{16, 32, 1024, -1, 0},
-    std::array{16, 32, 1024, -1, 1},
-    std::array{16, 32, 1024, -1, 2},
-    std::array{16, 32, 1024, -1, 3},
-
-    std::array{16, 32, 1024, 0, 0},
-    std::array{16, 32, 1024, 0, 1},
-    std::array{16, 32, 1024, 0, 2},
-    std::array{16, 32, 1024, 0, 3},
-    
-    std::array{16, 32, 1024, 1, 0},
-    std::array{16, 32, 1024, 1, 1},
-    std::array{16, 32, 1024, 1, 2},
-    std::array{16, 32, 1024, 1, 3},
-
-    // bench I/O: algocode=0
-    std::array{16, 32, 1024, -1, 3},
-    std::array{16, 32, 1024, 0, 3},
-    std::array{16, 32, 1024, 1, 3},
-
-    // bench layout: memcode=0, algocode=3
-    std::array{16, 32, 1024, 0, 3},
-    std::array{8, 32, 1024, 0, 3},
-    std::array{4, 32, 1024, 0, 3},
-
-    std::array{16, 32, 512, 0, 3},
-    std::array{8, 32, 512, 0, 3},
-    std::array{4, 32, 512, 0, 3},
-
-    std::array{16, 32, 256, 0, 3},
-    std::array{8, 32, 256, 0, 3},
-    std::array{4, 32, 256, 0, 3},
-
-    std::array{16, 32, 128, 0, 3},
-    std::array{8, 32, 128, 0, 3},
-    std::array{4, 32, 128, 0, 3},
-
-    // bench layout: memcode=1, algocode=3
-    std::array{16, 32, 1024, 1, 3},
-    std::array{8, 32, 1024, 1, 3},
-    std::array{4, 32, 1024, 1, 3},
-
-    std::array{16, 32, 512, 1, 3},
-    std::array{8, 32, 512, 1, 3},
-    std::array{4, 32, 512, 1, 3},
-
-    std::array{16, 32, 256, 1, 3},
-    std::array{8, 32, 256, 1, 3},
-    std::array{4, 32, 256, 1, 3},
-
-    std::array{16, 32, 128, 1, 3},
-    std::array{8, 32, 128, 1, 3},
-    std::array{4, 32, 128, 1, 3},
-};
-
 
 Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool reverse, const Option& options) {
     TORCH_CHECK(inputs.sizes() == coeffs.sizes());               // same dimensions
@@ -239,4 +174,43 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
         }, "linrec_tile_bwd_kernel", paramnames); // names for errors
 
     return std::make_tuple(d_inputs, d_coeffs);
+}
+
+
+std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& options) {
+    
+    // Unpack and determine compile-time arguments
+    // TODO: make sure that all keys are in {"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock",  "memcode", "algocode"}
+    int memcode = get(options, "memcode", 0);
+    int algocode = get(options, "algocode", 3);
+
+    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 16); 
+    int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
+    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 1024); 
+
+    // Dispatch templated function: instantiate compile-time parameters
+    auto paramnames = std::array{"kMaxElemsPerThread", "kMaxThreadsPerWarp", "kMaxThreadsPerBlock", "memcode", "algocode"};
+    auto params = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
+    
+    cudaFuncAttributes attrs;
+
+    dispatch<COMPILEPARAMS>(params, [&]<auto params>() {
+        static constexpr int kMaxElemsPerThread = params[0];
+        static constexpr int kMaxThreadsPerWarp = params[1];
+        static constexpr int kMaxThreadsPerBlock = params[2];
+        static constexpr int memcode = params[3];
+        static constexpr int algocode = params[4];
+    
+        // select kernel based on compile-time arguments
+        if (fwd) {
+            auto kernel = linrec_tile_fwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+            attrs = cudaFuncGetAttributes(kernel);
+        } else {
+            auto kernel = linrec_tile_bwd_kernel<float, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode>;
+            attrs = cudaFuncGetAttributes(kernel);
+        }
+    
+    }, "linrec_tile_attrs", paramnames); // names for errors
+
+    return cudaFuncAttributesAsMap(attrs);
 }

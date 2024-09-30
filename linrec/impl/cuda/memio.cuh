@@ -67,9 +67,13 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const ushort thre
         copy_naive(dst, &src[blockBaseIdx + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
     } else if (memcode==1) {
         __syncthreads(); // avoid race condition
-        copy_coalesced16(smem, &src[blockBaseIdx], elemsPerBlock);
-        __syncthreads();
+        copy_naive(&smem[threadBaseIdx], &src[blockBaseIdx + threadBaseIdx], elemsPerThread);
         copy_naive(dst, &smem[threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
+    } else if (memcode==2) {
+        __syncthreads(); // avoid race condition
+        copy_coalesced16(&smem[offset], &src[blockBaseIdx], elemsPerBlock);
+        __syncthreads();
+        copy_naive(dst, &smem[offset + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
     }
 }
 
@@ -79,10 +83,14 @@ __forceinline__  __device__  void store(kT* dst, const kT* src, const ushort thr
     if (memcode==0) {
         copy_naive(&dst[blockBaseIdx + threadBaseIdx], src, elemsPerThread, reverse); 
     } else if (memcode==1) {
+        __syncthreads(); // avoid race condition
+        copy_naive(&smem[threadBaseIdx], src, elemsPerThread, reverse); 
+        copy_naive(&dst[blockBaseIdx + threadBaseIdx], &smem[threadBaseIdx], elemsPerThread);
+    } else if (memcode==2) {
+        __syncthreads(); // avoid race condition
         copy_naive(&smem[threadBaseIdx], src, elemsPerThread, reverse); 
         __syncthreads();
         copy_coalesced16(&dst[blockBaseIdx], smem, elemsPerBlock);
-        __syncthreads(); // avoid race condition
     } 
 }
 

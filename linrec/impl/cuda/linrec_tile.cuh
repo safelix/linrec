@@ -140,9 +140,6 @@ linrec_tile_fwd_kernel_norev(const kT* inputs, const kT* coeffs, kT* outputs, in
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
     const ushort threadBaseIdx = threadId * elemsPerThread - max(threadTailId, 0);                     // base index to process by every thread
 
-    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
-
-
     // Load inputs and coeffs of tile into thread-local arrays
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
         threadAccOutput[i] = (i < threadSeqLen) ? inputs[seqBaseIdx + threadBaseIdx + i] : 0;
@@ -193,14 +190,13 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
     const ushort threadBaseIdx = !rev ? (threadId * elemsPerThread - max(threadTailId, 0)) :                    // base index to process by every thread
                                     ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0));   // reverse ordered base index
-
-    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
-
     
     // Load inputs and coeffs of tile into thread-local arrays
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-        threadAccOutput[i] = (i < threadSeqLen) ? inputs[seqBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] : 0;
-        threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[seqBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] : 1;
+        const int index = seqBaseIdx + threadBaseIdx + (!rev ? i : (threadSeqLen-1-i));
+        assert((i < threadSeqLen) ? (0 <= index && index < seqLen * (blockIdx.x + 1)) : true && "Error in index computation.");
+        threadAccOutput[i] = (i < threadSeqLen) ? inputs[index] : 0;
+        threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[index] : 1;
     }
     memio::load<kT, memcode>(threadAccOutput, inputs, threadBaseIdx, threadSeqLen, rev, kT(0), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
     memio::load<kT, memcode>(threadAccCoeff, coeffs, threadBaseIdx, threadSeqLen, rev, kT(1), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
@@ -213,7 +209,8 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
 
     // Store outputs
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-        outputs[seqBaseIdx + threadBaseIdx + (!rev ? i : (threadSeqLen-1-i))] = threadAccOutput[i];
+        const int index = seqBaseIdx + threadBaseIdx + (!rev ? i : (threadSeqLen-1-i));
+        outputs[index] = threadAccOutput[i];
     }
     memio::store<kT, memcode>(outputs, threadAccOutput, threadBaseIdx, threadSeqLen, rev, smem, seqBaseIdx, seqLen);
 }
@@ -249,13 +246,12 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     const ushort threadBaseIdx = !rev ? ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)) :  // backwards ordered base index to process by every thread
                                     ((threadId * elemsPerThread - max(threadTailId, 0)));                           // forward ordered base index
 
-    assert((threadBaseIdx + threadSeqLen <= seqLen) && "Error in threadBaseIdx or threadSeqLen computation.");
-
-
     // Load inputs and coeffs of tile into thread-local arrays
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-        threadAccDInput[i] = (i < threadSeqLen) ? d_outputs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] : 0;
-        threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] : 1;
+        const int index = seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i);
+        assert((i < threadSeqLen) ? (0 <= index && index < seqLen * (blockIdx.x + 1)) : true && "Error in index computation.");
+        threadAccDInput[i] = (i < threadSeqLen) ? d_outputs[index] : 0;
+        threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[index] : 1;
     }
     memio::load<kT, memcode>(threadAccDInput, d_outputs, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
     memio::load<kT, memcode>(threadAccCoeff, coeffs, threadBaseIdx, threadSeqLen, !rev, kT(1), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
@@ -269,7 +265,8 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
 
     // Store outputs of Back Propoagation Through Time
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-        d_inputs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadAccDInput[i];
+        const int index = seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i);
+        d_inputs[index] = threadAccDInput[i];
     }
     memio::store<kT, memcode>(d_inputs, threadAccDInput, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);
     
@@ -287,7 +284,9 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
 
 
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-        threadDCoeff[i] = (i < threadShSeqLen) ? outputs[seqBaseIdx + threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i)] : 0;
+        const int index = seqBaseIdx + threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i);
+        assert((i < threadShSeqLen) ? (0 <= index && index < seqLen * (blockIdx.x + 1)) : true && "Error in index computation.");
+        threadDCoeff[i] = (i < threadShSeqLen) ? outputs[index] : 0;
     }
     memio::load<kT, memcode>(threadDCoeff, outputs, threadShBaseIdx, threadShSeqLen, !rev, kT(0), kMaxElemsPerThread, smem, seqBaseIdx, seqLen);
     
@@ -296,7 +295,8 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     }
     
     for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-        d_coeffs[seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadDCoeff[i];
+        const int index = seqBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i);
+        d_coeffs[index] = threadDCoeff[i];
     }
     memio::store<kT, memcode>(d_coeffs, threadDCoeff, threadBaseIdx, threadSeqLen, !rev, smem, seqBaseIdx, seqLen);
 }

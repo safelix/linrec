@@ -1,5 +1,5 @@
 #include <torch/torch.h>
-#include <c10/cuda/CUDAGuard.h> // TODO: why can't I just use torch::cuda::CUDAGuard
+#include <c10/cuda/CUDAGuard.h>
 #include <c10/core/ScalarType.h>
 
 #include <linrec.h>
@@ -22,10 +22,11 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
     TORCH_CHECK(inputs.scalar_type() == coeffs.scalar_type());   // same dtype
     TORCH_CHECK(inputs.scalar_type() == torch::ScalarType::Float); // TODO: dispatch
 
-    // Select correct CUDA device and default stream: otherwise cuda:0 is used
-    // https://pytorch.org/cppdocs/notes/tensor_cuda_stream.html
-    const at::cuda::CUDAGuard guard(inputs.get_device());
-    //auto stream = torch::cuda::getCurrentCUDAStream().stream(); // should be used by default
+    // Select correct CUDA device and it's current stream, otherwise current device and it's default stream (0x0) are used
+    // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#stream-and-event-behavior
+    // https://pytorch.org/cppdocs/notes/tensor_cuda_stream.html (streams are only managed by torch)
+    const c10::cuda::CUDAGuard guard(inputs.device());          // calls cudaSetDevice internally
+    auto stream = c10::cuda::getCurrentCUDAStream().stream();   // current stream might not be 0x0
 
     // Prepare Outputs
     Tensor outputs = torch::empty_like(inputs);
@@ -81,11 +82,12 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
         }
 
         // launch kernel
-        kernel<<<blocks, threads, smem>>>(
+        kernel<<<blocks, threads, smem, stream>>>(
             inputs.data_ptr<float>(),
             coeffs.data_ptr<float>(), 
             outputs.data_ptr<float>(), 
             seqlen, reverse);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
     }, "linrec_tile_fwd_kernel", CONFIG_NAMES); // names for errors
 
     return outputs;
@@ -101,10 +103,11 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
     TORCH_CHECK(d_outputs.scalar_type() == coeffs.scalar_type() && coeffs.scalar_type() == outputs.scalar_type());  // same dtype
     TORCH_CHECK(d_outputs.scalar_type() == torch::ScalarType::Float); // TODO: dispatch
 
-    // Select correct CUDA device and default stream: otherwise cuda:0 is used
-    // https://pytorch.org/cppdocs/notes/tensor_cuda_stream.html
-    const at::cuda::CUDAGuard guard(d_outputs.get_device());
-    //auto stream = torch::cuda::getCurrentCUDAStream().stream();
+    // Select correct CUDA device and it's current stream, otherwise current device and it's default stream (0x0) are used
+    // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#stream-and-event-behavior
+    // https://pytorch.org/cppdocs/notes/tensor_cuda_stream.html (streams are only managed by torch)
+    const c10::cuda::CUDAGuard guard(d_outputs.device());       // calls cudaSetDevice internally
+    auto stream = c10::cuda::getCurrentCUDAStream().stream();   // current stream might not be 0x0
 
     // Prepare Outputs
     Tensor d_inputs = torch::empty_like(d_outputs);
@@ -160,13 +163,14 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
         }
 
         // launch kernel
-        kernel<<<blocks, threads, smem>>>(
+        kernel<<<blocks, threads, smem, stream>>>(
             d_outputs.data_ptr<float>(), 
             coeffs.data_ptr<float>(), 
             outputs.data_ptr<float>(), 
             d_inputs.data_ptr<float>(), 
             d_coeffs.data_ptr<float>(), 
             seqlen, reverse);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
         }, "linrec_tile_bwd_kernel", CONFIG_NAMES); // names for errors
 
     return std::make_tuple(d_inputs, d_coeffs);

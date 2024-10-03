@@ -64,8 +64,8 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
         
             // Store last threadAccOutput and -Gate into seqAccOutput and and -Gate
             if (threadId == numThreads-1 && elemsPerTile < remainingElems) {
-                seqAccOutput = threadAccOutput[threadSeqLen-1];
-                seqAccCoeff = threadAccCoeff[threadSeqLen-1];
+                seqAccOutput = threadAccOutput[kMaxElemsPerThread-1];
+                seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid divergence
         }
 
@@ -147,8 +147,8 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         
             // Store last threadAccDInput and -Gate into seqAccOutput and and -Gate
             if (threadId == numThreads-1 && elemsPerTile < remainingElems) {
-                seqAccOutput = threadAccDInput[threadSeqLen-1];
-                seqAccCoeff = threadAccCoeff[threadSeqLen-1];
+                seqAccOutput = threadAccDInput[kMaxElemsPerThread-1];
+                seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid divergence
         }
 

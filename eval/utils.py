@@ -30,13 +30,13 @@ def meminit(seqlen, n_batches=1, n_channels=1, fwd=True, dtype=None, device=None
         generator = generator.manual_seed(seed)
 
     inputs = torch.randn(size=size, dtype=dtype, device=device, generator=generator)
-    coeffs = 0.99 * torch.ones(size=size, dtype=dtype, device=device)
+    coeffs = torch.rand(size=size, dtype=dtype, device=device)
 
     if fwd:
         return inputs, coeffs
 
     outputs = _C.linrec_ref_fwd(inputs, coeffs)
-    d_outputs = 0.99 * torch.ones(size=size, dtype=dtype, device=device, requires_grad=False)
+    d_outputs = torch.randn(size=size, dtype=dtype, device=device)
     return d_outputs, coeffs, outputs
 
 def memio(stmt, data):

@@ -44,7 +44,7 @@ if __name__ == '__main__':
     from functools import partial
 
     parser = ArgumentParser()
-    impls = ['linrec_tile_fwd', 'linrec_tile_bwd', 'linrec_pipe_bwd', 'linrec_pipe_bwd']
+    impls = ['linrec_tile_fwd', 'linrec_tile_bwd', 'linrec_pipe_fwd', 'linrec_pipe_bwd']
     parser.add_argument('impl', choices=impls, help='Which implementation to tune.')
     parser.add_argument('--seqlen_min', type=int, default=4, help='Minimal sequence length to tune with.')
     parser.add_argument('--seqlen_max', type=int, default=14, help='Maximal sequence length to tune with.')
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     ref =  partial(getattr(_C, f'linrec_ref_{args.impl[-3:]}'), reverse=args.reverse)
 
     index, stmts = [], []
-    for p in _C.config_list:
+    for p in dict((tuple(c), None) for c in _C.config_list): # orderd dict to make _C.config_list unique
         kwargs = dict(zip(_C.config_names, p))
 
         index_key, drop_stmt = {}, False

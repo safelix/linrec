@@ -17,17 +17,17 @@ __forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __r
 }
 
 template <typename kT, typename count_t>
-__forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerThread, const bool reverse) {
+__forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerThread, const bool rev) {
     for (count_t i = 0; i < elemsPerThread; i++) {
-        count_t irev = !reverse ? i : (elemsPerThread-i-1);
+        count_t irev = !rev ? i : (elemsPerThread-i-1);
         dst[i] = src[irev];
     }
 }
 
 template <typename kT, typename count_t>
-__forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerThread, const bool reverse, const kT fill, const count_t maxElemsPerThread) {
+__forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerThread, const bool rev, const kT fill, const count_t maxElemsPerThread) {
     for (count_t i = 0; i < maxElemsPerThread; i++) {
-        count_t irev = !reverse ? i : (elemsPerThread-i-1);
+        count_t irev = !rev ? i : (elemsPerThread-i-1);
         dst[i] = (i < elemsPerThread) ? src[irev] : fill;
     }
 }
@@ -95,40 +95,50 @@ __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const k
 
 
 template <typename kT, int memcode>
-__forceinline__  __device__  void load(kT* dst, const kT* src, const ushort threadBaseIdx, const ushort elemsPerThread, const bool reverse, const kT fill, const ushort maxElemsPerThread, kT* smem, const int blockBaseIdx, const int elemsPerBlock) {
+__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, const int tileBaseIdx, const ushort tileSeqLen, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread) {
 
     if (memcode==0) {
-        copy_naive(dst, &src[blockBaseIdx + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
+        copy_naive(dst, &src[tileBaseIdx + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     } else if (memcode==1) {
         __syncthreads(); // avoid race condition
-        copy_naive(&smem[threadBaseIdx], &src[blockBaseIdx + threadBaseIdx], elemsPerThread);
-        copy_naive(dst, &smem[threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
+        copy_naive(&smem[threadBaseIdx], &src[tileBaseIdx + threadBaseIdx], threadSeqLen);
+        copy_naive(dst, &smem[threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     } else if (memcode==2) {
         __syncthreads(); // avoid race condition
-        const ushort offset = ((long) &src[blockBaseIdx] % 16) / sizeof(kT);
+        const ushort offset = ((long) &src[tileBaseIdx] % 16) / sizeof(kT);
         const ushort align = 16 / sizeof(kT) - offset;
-        copy_coalesced16(&smem[offset], &src[blockBaseIdx], elemsPerBlock, align);
+        copy_coalesced16(&smem[offset], &src[tileBaseIdx], tileSeqLen, align);
         __syncthreads();
-        copy_naive(dst, &smem[offset + threadBaseIdx], elemsPerThread, reverse, fill, maxElemsPerThread);
+        copy_naive(dst, &smem[offset + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     }
 }
 
 template <typename kT, int memcode>
-__forceinline__  __device__  void store(kT* dst, const kT* src, const ushort threadBaseIdx, const ushort elemsPerThread, const bool reverse, kT* smem, const int blockBaseIdx, const int elemsPerBlock) {
+__forceinline__  __device__  void store(kT* dst, const kT* src, const int seqLen, kT* smem, const int tileBaseIdx, const ushort tileSeqLen, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev) {
 
     if (memcode==0) {
-        copy_naive(&dst[blockBaseIdx + threadBaseIdx], src, elemsPerThread, reverse); 
+        copy_naive(&dst[tileBaseIdx + threadBaseIdx], src, threadSeqLen, rev); 
     } else if (memcode==1) {
         __syncthreads(); // avoid race condition
-        copy_naive(&smem[threadBaseIdx], src, elemsPerThread, reverse); 
-        copy_naive(&dst[blockBaseIdx + threadBaseIdx], &smem[threadBaseIdx], elemsPerThread);
+        copy_naive(&smem[threadBaseIdx], src, threadSeqLen, rev); 
+        copy_naive(&dst[tileBaseIdx + threadBaseIdx], &smem[threadBaseIdx], threadSeqLen);
     } else if (memcode==2) {
         __syncthreads(); // avoid race condition
-        copy_naive(&smem[threadBaseIdx], src, elemsPerThread, reverse); 
+        copy_naive(&smem[threadBaseIdx], src, threadSeqLen, rev); 
         __syncthreads();
-        copy_coalesced16(&dst[blockBaseIdx], smem, elemsPerBlock);
-    } 
+        copy_coalesced16(&dst[tileBaseIdx], smem, tileSeqLen);
+    }
 }
 
+
+template <typename kT, int memcode>
+__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread) {
+    load<kT, memcode>(dst, src, seqLen, smem, 0, seqLen, threadBaseIdx, threadSeqLen, rev, fill, maxElemsPerThread);
+}
+
+template <typename kT, int memcode>
+__forceinline__  __device__  void store(kT* dst, const kT* src, const int seqLen, kT* smem, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev) {
+    store<kT, memcode>(dst, src, seqLen, smem, 0, seqLen, threadBaseIdx, threadSeqLen, rev);
+}
 
 } // namespace memio

@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda.h>
 #include <memio.cuh>
+#include <cuhelpers.cuh>
 #include <linrec_tile.cuh>
 
 
@@ -8,6 +9,7 @@ template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ush
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
 linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen, const bool rev) {
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
+    __shared__ kT seqAccOutput, seqAccCoeff; // for sequential accumulation between tiles
 
     // Layout: dim=(X,L), strides=(L,1)
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently in reverse: inputs[seqBaseIdx-i]
@@ -15,43 +17,29 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     coeffs = &coeffs[seqBaseIdx];
     outputs = &outputs[seqBaseIdx];
 
-    // Determine Warp Configuration (at run-time)
+    // Determine Tile Layout
     const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
-    const ushort threadId = threadIdx.x;
-    const ushort warpId = threadIdx.x / kMaxThreadsPerWarp;
-    const ushort laneId = threadIdx.x % kMaxThreadsPerWarp;
-    const ushort numWarps = ceildiv(numThreads, kMaxThreadsPerWarp);
-    const ushort lastWarpSize = numThreads - kMaxThreadsPerWarp * (numWarps-1);
-    const ushort thisWarpSize = (warpId==numWarps-1) ? lastWarpSize : kMaxThreadsPerWarp;
-    
-    assert((warpId==numWarps-1) ? (thisWarpSize == kMaxThreadsPerWarp) : true && "Error in thisWarpSize computation.");
-    
+    const ushort threadIdrev = !rev ? threadIdx.x : (numThreads - threadIdx.x - 1);                     // thread index, reversed to load reversed
 
-    __shared__ kT seqAccOutput, seqAccCoeff; // for comunication between tiles
     const ushort elemsPerTile = kMaxElemsPerThread * numThreads;
     int tileBaseIdx = !rev ? 0 : max(seqLen - elemsPerTile, 0); // if reverse start with last tile
     while (true) {  // sequentially combine subsequences of size elemsPerTile if seqLen doesn't fit into one thread block
     
         const bool firstTile = !rev ? (tileBaseIdx <= 0) : (seqLen-elemsPerTile <= tileBaseIdx);
         const bool lastTile = !rev ? (seqLen-elemsPerTile <= tileBaseIdx) : (tileBaseIdx <= 0);
-        const ushort tileSeqLen = !lastTile ? elemsPerTile : ((seqLen-1)%elemsPerTile)+1;             // length of the tile to scan with thread block
+        const ushort tileSeqLen = !lastTile ? elemsPerTile : ceilmod(seqLen, (int) elemsPerTile);       // length of the tile to scan with thread block
 
         const ushort elemsPerThread = ceildiv(tileSeqLen, numThreads);                                  // distribute subseqlen among numThreads
         const ushort numTailThreads = numThreads * elemsPerThread - tileSeqLen;                         // last numTailThreads have one elem less
-        const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
+        const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
         const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
-        const ushort threadBaseIdx = !rev ? (threadId * elemsPerThread - max(threadTailId, 0)) :                     // base index to process by every thread
-                                        ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)); // reverse ordered base index
+        const ushort threadBaseIdx = threadIdrev * elemsPerThread - max(threadTailId, 0);               // base index to process by every thread
 
 
         //
         // Load inputs and coeffs of tile into thread-local arrays
         kT threadAccOutput[kMaxElemsPerThread];
         kT threadAccCoeff[kMaxElemsPerThread];
-        for (ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-            threadAccOutput[i] = (i < threadSeqLen) ? inputs[tileBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] : 0;
-            threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[tileBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] : 1;
-        }
         memio::load<kT, memcode>(threadAccOutput, inputs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, rev, kT(0), kMaxElemsPerThread);
         memio::load<kT, memcode>(threadAccCoeff, coeffs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, rev, kT(1), kMaxElemsPerThread);
 
@@ -59,24 +47,21 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
         if (algocode >= 1) { // level 1,2,3 of block-wise parallel scan
 
             // Combine seqAccOutput and and -Gate with first threadAccOutput and -Gate 
-            if (threadId == 0 && !firstTile){
+            if (threadIdx.x == 0 && !firstTile){
                 threadAccOutput[0] = seqAccOutput * threadAccCoeff[0] + threadAccOutput[0];
                 threadAccCoeff[0] =  seqAccCoeff * threadAccCoeff[0];
             } __syncthreads(); // avoid divergence
 
-            _linrec_scan_tile_parallel_<kT, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccOutput, threadAccCoeff, kMaxElemsPerThread, laneId, thisWarpSize, warpId, numWarps, numThreads);
+            _linrec_scan_tile_parallel_<kT, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccOutput, threadAccCoeff, kMaxElemsPerThread, numThreads);
         
             // Store last threadAccOutput and -Gate into seqAccOutput and and -Gate
-            if (threadId == numThreads-1 && !lastTile) {
+            if (threadIdx.x == numThreads-1 && !lastTile) {
                 seqAccOutput = threadAccOutput[kMaxElemsPerThread-1];
                 seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid divergence
         }
 
         // Store outputs
-        for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-            outputs[tileBaseIdx + threadBaseIdx + (!rev ? i : threadSeqLen-1-i)] = threadAccOutput[i];
-        }
         memio::store<kT, memcode>(outputs, threadAccOutput, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, rev);
 
 
@@ -93,6 +78,7 @@ template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ush
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
 linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool rev) {
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
+    __shared__ kT seqAccOutput, seqAccCoeff; // for sequential accumulation between tiles
 
     // Layout: dim=(X,L), strides=(L,1)
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently in reverse: inputs[seqBaseIdx-i]
@@ -102,43 +88,29 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     d_inputs = &d_inputs[seqBaseIdx];
     d_coeffs = &d_coeffs[seqBaseIdx];
 
-    // Determine Warp Configuration (at run-time)
+    // Determine Tile Layout
     const ushort numThreads = kMaxThreadsPerBlock; // blockDim.x;
-    const ushort threadId = threadIdx.x;
-    const ushort warpId = threadIdx.x / kMaxThreadsPerWarp;
-    const ushort laneId = threadIdx.x % kMaxThreadsPerWarp;
-    const ushort numWarps = ceildiv(numThreads, kMaxThreadsPerWarp);
-    const ushort lastWarpSize = numThreads - kMaxThreadsPerWarp * (numWarps-1);
-    const ushort thisWarpSize = (warpId==numWarps-1) ? lastWarpSize : kMaxThreadsPerWarp;
-    
-    assert((warpId==numWarps-1) ? (thisWarpSize == kMaxThreadsPerWarp) : true && "Error in thisWarpSize computation.");
+    const ushort threadIdrev = !rev ? (numThreads - threadIdx.x - 1) : threadIdx.x;                     // reversed thread index to load reversed by default
 
-
-    __shared__ kT seqAccOutput, seqAccCoeff; // for comunication between tiles
     const ushort elemsPerTile = kMaxElemsPerThread * numThreads;
     int tileBaseIdx = !rev ? max(seqLen - elemsPerTile, 0) : 0; // if forward start with last tile
     while (true) {  // sequentially combine subsequences of size elemsPerTile if seqLen doesn't fit into one thread block
 
         const bool firstTile = !rev ? (seqLen-elemsPerTile <= tileBaseIdx) : (tileBaseIdx <= 0);
         const bool lastTile = !rev ? (tileBaseIdx <= 0) : (seqLen-elemsPerTile <= tileBaseIdx);
-        const ushort tileSeqLen = !lastTile ? elemsPerTile : ((seqLen-1)%elemsPerTile)+1;               // length of the tile to scan with thread block
+        const ushort tileSeqLen = !lastTile ? elemsPerTile : ceilmod(seqLen, (int) elemsPerTile);       // length of the tile to scan with thread block
 
         const ushort elemsPerThread = ceildiv(tileSeqLen, numThreads);                                  // distribute subseqlen among numThreads
         const ushort numTailThreads = numThreads * elemsPerThread - tileSeqLen;                         // last numTailThreads have one elem less
-        const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
+        const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
         const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
-        const ushort threadBaseIdx = !rev ? ((numThreads-1-threadId) * (elemsPerThread-1) + max(-threadTailId-1, 0)) : // backwards ordered base index to process by every thread
-                                    ((threadId * elemsPerThread - max(threadTailId, 0)));                           // forward ordered base index
+        const ushort threadBaseIdx = threadIdrev * elemsPerThread - max(threadTailId, 0);               // base index to process by every thread
 
 
         //
         // Load inputs and coeffs of tile into thread-local arrays
         kT threadAccDInput[kMaxElemsPerThread];
         kT threadAccCoeff[kMaxElemsPerThread];
-        for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-            threadAccDInput[i] = (i < threadSeqLen) ? d_outputs[tileBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] : 0;
-            threadAccCoeff[i] = (i < threadSeqLen) ? coeffs[tileBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] : 1;
-        }
         memio::load<kT, memcode>(threadAccDInput, d_outputs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread);
         memio::load<kT, memcode>(threadAccCoeff, coeffs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev, kT(1), kMaxElemsPerThread);
 
@@ -146,24 +118,21 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         if (algocode >= 1) { // level 1,2,3 of block-wise parallel scan
 
             // Combine seqAccOutput and and -Gate with first threadAccDInput and -Gate 
-            if (threadId == 0 && !firstTile){
+            if (threadIdx.x == 0 && !firstTile){
                 threadAccDInput[0] = seqAccOutput * threadAccCoeff[0] + threadAccDInput[0];
                 threadAccCoeff[0] =  seqAccCoeff * threadAccCoeff[0];
             } __syncthreads(); // avoid divergence
 
-            _linrec_scan_tile_parallel_<kT, kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccDInput, threadAccCoeff, kMaxElemsPerThread, laneId, thisWarpSize, warpId, numWarps, numThreads);
+            _linrec_scan_tile_parallel_<kT, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccDInput, threadAccCoeff, kMaxElemsPerThread, numThreads);
         
             // Store last threadAccDInput and -Gate into seqAccOutput and and -Gate
-            if (threadId == numThreads-1 && !lastTile) {
+            if (threadIdx.x == numThreads-1 && !lastTile) {
                 seqAccOutput = threadAccDInput[kMaxElemsPerThread-1];
                 seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid divergence
         }
 
         // Store outputs of Back Propoagation Through Time
-        for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-            d_inputs[tileBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadAccDInput[i];
-        }
         memio::store<kT, memcode>(d_inputs, threadAccDInput, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev);
 
 
@@ -172,11 +141,6 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         // Load outputs shifted to the right or if reverse shifted to the left
         short shift = !rev ? 1 : -1;
         kT threadDCoeff[kMaxElemsPerThread];
-        for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-            bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==tileSeqLen);
-            const ushort threadShSeqLen = threadSeqLen - ((lastTile && lastThread && threadSeqLen>0) ? abs(shift) : 0);
-            threadDCoeff[i] = (i < threadShSeqLen) ? outputs[tileBaseIdx + threadBaseIdx + (!rev ? (threadShSeqLen-i-1) : i) - shift] : 0;
-        }
         memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, shift);
         
         // shifted element-wise multiplication
@@ -185,9 +149,6 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         }
         
         // Store outputs of shifted element-wise multiplication
-        for(ushort i = 0; memcode < 0 && i < threadSeqLen; i++) {
-            d_coeffs[tileBaseIdx + threadBaseIdx + (!rev ? (threadSeqLen-1-i) : i)] = threadDCoeff[i];
-        }
         memio::store<kT, memcode>(d_coeffs, threadDCoeff, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev);
 
 

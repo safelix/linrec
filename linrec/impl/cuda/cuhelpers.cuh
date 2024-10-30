@@ -2,6 +2,21 @@
 #include <iostream>
 #include <cuda_runtime.h>
 
+/**************************** CUDA Kernel Helpers ***************************/
+
+// Integer ceiling division 
+template <typename T>
+constexpr T ceildiv(T lhs, T rhs){
+    return ((lhs - 1) / rhs) + 1;
+}
+
+// Integer ceiling modulo 
+template <typename T>
+constexpr T ceilmod(T lhs, T rhs){
+    return ((lhs - 1) % rhs) + 1;
+}
+
+
 
 /**************************** CUDA Runtime Helpers ***************************/
 

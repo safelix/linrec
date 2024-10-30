@@ -126,6 +126,14 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen,
     else if (shift == 1) shiftIdx(seqLen, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, 1);
     else if (shift != 0) assert(false && "Not compiled for shift outside of {-1,0,1}");
 
+    if (memcode < 0) {
+        assert(0 <= tileBaseIdx && "Memory error");
+        assert(tileBaseIdx + tileSeqLen <= seqLen && "Memory error");
+        assert(threadBaseIdx + threadSeqLen <= tileSeqLen && "Memory error");
+        assert(tileBaseIdx + threadBaseIdx + threadSeqLen <= seqLen && "Memory error");
+        copy_naive(dst, &src[tileBaseIdx + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
+    }
+
     if (memcode==0) {
         copy_naive(dst, &src[tileBaseIdx + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     } else if (memcode==1) {
@@ -144,6 +152,14 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen,
 
 template <typename kT, int memcode>
 __forceinline__  __device__  void store(kT* dst, const kT* src, const int seqLen, kT* smem, const int tileBaseIdx, const ushort tileSeqLen, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev) {
+
+    if (memcode < 0) {
+        assert(0 <= tileBaseIdx && "Memory error");
+        assert(tileBaseIdx + tileSeqLen <= seqLen && "Memory error");
+        assert(threadBaseIdx + threadSeqLen <= tileSeqLen && "Memory error");
+        assert(tileBaseIdx + threadBaseIdx + threadSeqLen <= seqLen && "Memory error");
+        copy_naive(&dst[tileBaseIdx + threadBaseIdx], src, threadSeqLen, rev); 
+    }
 
     if (memcode==0) {
         copy_naive(&dst[tileBaseIdx + threadBaseIdx], src, threadSeqLen, rev); 

@@ -8,14 +8,14 @@ _C = build.extension()
 
 
 @execption2nan(warn=True)
-def bench(stmt, meminit, throughput=False, **kwargs):
+def bench(stmt, throughput=False, **memargs):
 
-    data = meminit(**kwargs)
+    data = meminit(**memargs)
 
     if stmt in [memio_limit, 'memio_limit']:
-        ms, bytes = memio_limit(**kwargs)
+        ms, bytes = memio_limit(**memargs)
     else:
-        with torch.cuda.device(kwargs.get('device', None)):
+        with torch.cuda.device(memargs.get('device', None)):
             ms = do_bench(lambda: stmt(*data))#, warmup=50, rep=1000)
         bytes = memio(stmt, data)
     del data
@@ -25,8 +25,8 @@ def bench(stmt, meminit, throughput=False, **kwargs):
     return ms
 
 @execption2nan()
-def test(stmt, meminit, ref, **kwargs):
-    data = meminit(**kwargs)
+def test(stmt, ref, **memargs):
+    data = meminit(**memargs)
 
     out = stmt(*data)
     sol = ref(*data)
@@ -59,6 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--algocode', type=int, default=None, help='Value to filter algocode with.')
     parser.add_argument('--seed', type=int, default=12334567890, help='Seed to generate data with.')
     parser.add_argument('--device', type=int, default=0, help='Device id to tune on.')
+    parser.add_argument('--csv', action='store_true', help='Store results as CSV.')
     args = parser.parse_args()
 
     # Prepare Data Arguments
@@ -74,7 +75,7 @@ if __name__ == '__main__':
                 device=args.device,
                 seed=args.seed)
     
-    iolimit = [bench(memio_limit, meminit, throughput=args.throughput, **dict(seqlen=seqlen, **memargs)) for seqlen in seqlens]
+    iolimit = [bench(memio_limit, throughput=args.throughput, **dict(seqlen=seqlen, **memargs)) for seqlen in seqlens]
     
     # Prepare Statements
     func = partial(getattr(_C, args.impl), reverse=args.reverse)
@@ -101,8 +102,8 @@ if __name__ == '__main__':
     stmts = pd.Series(stmts, index=index)
 
     # Execute one statment 
-    #print(bench(stmts.iloc[0], meminit, throughput=args.throughput, **dict(seqlen=seqlens[0], **memargs)))
-    #print(test(stmts.iloc[0], meminit, ref=ref, **dict(seqlen=seqlens[0], **memargs)))
+    #print(bench(stmts.iloc[0], throughput=args.throughput, **dict(seqlen=seqlens[0], **memargs)))
+    #print(test(stmts.iloc[0], ref=ref, **dict(seqlen=seqlens[0], **memargs)))
 
     # Run Benchmark
     benchmark = Benchmark(
@@ -112,7 +113,7 @@ if __name__ == '__main__':
         line_names=list(str(i) for i in stmts.index),
         line_vals=list(stmts),
         plot_name=f'Tune {args.impl} ({torch.cuda.get_device_name()})',
-        args=dict(meminit=meminit, **memargs),
+        args=memargs,
         xlabel='sequence length',
         x_log=True,
         y_log=True,
@@ -121,11 +122,13 @@ if __name__ == '__main__':
     columns = pd.Index(seqlens, name='seqlen')
     diffs = Mark(test, benchmark).run(return_df=True, ref=ref)
     diffs = pd.DataFrame(diffs.values[:, 1:].T, columns=columns, index=index)
-    diffs.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_diffs.csv')
+    if args.csv:
+        diffs.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_diffs.csv')
 
     times = Mark(bench, benchmark).run(return_df=True, throughput=args.throughput)
     times = pd.DataFrame(times.values[:, 1:].T, columns=columns, index=index)
-    times.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_times.csv')
+    if args.csv:
+        times.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_times.csv')
 
     # Add iolimit to index and lmem column to data
     columns = pd.MultiIndex.from_arrays([seqlens, iolimit], names=['seqlen', 'iolimit'])

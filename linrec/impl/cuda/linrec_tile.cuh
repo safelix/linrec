@@ -127,8 +127,7 @@ linrec_tile_fwd_kernel_naive(const kT* inputs, const kT* coeffs, kT* outputs, in
 
     // Determine Tile Layout
     const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
-    const ushort threadId = threadIdx.x;
-
+    const ushort threadId = threadIdx.x;                                                            // index of current thread
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
@@ -171,7 +170,6 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     // Determine Tile Layout
     const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
     const ushort threadIdrev = !rev ? threadIdx.x : (numThreads - threadIdx.x - 1);                 // thread index, reversed to load reversed
-
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
@@ -214,7 +212,6 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     // Determine Tile Layout
     const ushort numThreads = kMaxThreadsPerBlock; // blockDim.x;
     const ushort threadIdrev = !rev ? (numThreads - threadIdx.x - 1) : threadIdx.x;                 // reversed thread index to load reversed by default
-
     const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
@@ -240,13 +237,12 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     
     
     //
-    // Compute and Store Coefficient Derivatives (element-wise shifted multiplication)
     // Load outputs shifted to the right or if reverse shifted to the left
     kT threadDCoeff[kMaxElemsPerThread];
     short shift = !rev ? 1 : -1;
     memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, shift);
     
-    // shifted element-wise multiplication
+    // Compute shifted element-wise multiplication
     for(ushort i = 0; 0 < algocode && i < kMaxElemsPerThread; i++) {
         threadDCoeff[i] *= threadAccDInput[i];
     }

@@ -169,23 +169,15 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
 
         //
         // Compute and Store Coefficient Derivatives (element-wise shifted multiplication) 
-        // Outputs are shifted to the right (index -1) or if reverse shifted to the left (index +1) 
-        // - edge case for (!rev && lastTile): out of bounds at outputs[-1] => tileShBaseIdx=0, tileShSeqLen=tileSeqLen-1
-        // - edge case for (rev && lastTile): out of bounds at outputs[seqLen] => tileShSeqLen=tileSeqLen-1
-        const int tileShBaseIdx = tileBaseIdx + (!rev ? (lastTile ? 0:-1) : +1);
-        const ushort tileShSeqLen = tileSeqLen + (lastTile ? -1 : 0); 
-
-        // For all threads in lastTile: shift like in linrec_tile.cuh since tileShSeqLen=tileSeqLen-1
-        bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==tileSeqLen);
-        const ushort threadShBaseIdx = threadBaseIdx + ((!rev && lastTile && !lastThread) ? -1 : 0 ); // no +1!!
-        const ushort threadShSeqLen = threadSeqLen + ((lastTile && lastThread && threadSeqLen>0) ? -1 : 0);
-
-        // Load shifted outputs of tile into thread-local arrays
+        // Load outputs shifted to the right or if reverse shifted to the left
+        short shift = !rev ? 1 : -1;
         kT threadDCoeff[kMaxElemsPerThread];
         for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-            threadDCoeff[i] = (i < threadShSeqLen) ? outputs[tileShBaseIdx + threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i)] : 0;
+            bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==tileSeqLen);
+            const ushort threadShSeqLen = threadSeqLen - ((lastTile && lastThread && threadSeqLen>0) ? abs(shift) : 0);
+            threadDCoeff[i] = (i < threadShSeqLen) ? outputs[tileBaseIdx + threadBaseIdx + (!rev ? (threadShSeqLen-i-1) : i) - shift] : 0;
         }
-        memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, tileShBaseIdx, tileShSeqLen, threadShBaseIdx, threadShSeqLen, !rev, kT(0), kMaxElemsPerThread);
+        memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, shift);
         
         // shifted element-wise multiplication
         for(ushort i = 0; 0 < algocode && i < kMaxElemsPerThread; i++) {

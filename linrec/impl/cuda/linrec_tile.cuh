@@ -277,19 +277,15 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     
     //
     // Compute and Store Coefficient Derivatives (element-wise shifted multiplication)
-    // Outputs are shifted to the right (index -1) or if reverse shifted to the left (index +1) 
-    // - edge case for (!rev && threadBaseIdx==first): out of bounds at outputs[-1] => threadShBaseIdx=0, threadShSeqLen=threadSeqLen-1
-    // - edge case for (rev && threadBaseIdx==last): out of bounds at outputs[seqLen] => threadShSeqLen=threadSeqLen-1
-    bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==seqLen);
-    const ushort threadShBaseIdx = threadBaseIdx + (!rev ? (!lastThread ? -1 : 0) : +1);
-    const ushort threadShSeqLen = threadSeqLen + ((lastThread && threadSeqLen>0) ? -1 : 0);
-
-    // Load shifted outputs of tile into thread-local arrays
+    // Load outputs shifted to the right or if reverse shifted to the left
+    short shift = !rev ? 1 : -1;
     kT threadDCoeff[kMaxElemsPerThread];
     for(ushort i = 0; memcode < 0 && i < kMaxElemsPerThread; i++) {
-        threadDCoeff[i] = (i < threadShSeqLen) ? outputs[threadShBaseIdx + (!rev ? (threadShSeqLen-i-1) : i)] : 0;
+        bool lastThread = (!rev && threadBaseIdx==0) || (rev && threadBaseIdx+threadSeqLen==seqLen);
+        const ushort threadShSeqLen = threadSeqLen - ((lastThread && threadSeqLen>0) ? abs(shift) : 0);
+        threadDCoeff[i] = (i < threadShSeqLen) ? outputs[threadBaseIdx + (!rev ? (threadShSeqLen-i-1) : i) - shift] : 0;
     }
-    memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, threadShBaseIdx, threadShSeqLen, !rev, kT(0), kMaxElemsPerThread);
+    memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, shift);
     
     // shifted element-wise multiplication
     for(ushort i = 0; 0 < algocode && i < kMaxElemsPerThread; i++) {

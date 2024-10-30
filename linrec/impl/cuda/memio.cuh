@@ -36,7 +36,7 @@ __forceinline__  __device__  void copy_naive(kT* __restrict__ dst, const kT* __r
 template <typename kT, typename count_t>
 __forceinline__  __device__  void copy_coalesced(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerBlock) {
     const ushort numThreads = blockDim.x;
-    const ushort threadId = threadIdx.x; // TODO: compute real threadIdx.z threadIdx.y 
+    const ushort threadId = threadIdx.x;
 
     for (count_t i = threadId; i < elemsPerBlock; i += numThreads) {
         dst[i] = src[i]; 
@@ -46,7 +46,7 @@ __forceinline__  __device__  void copy_coalesced(kT* __restrict__ dst, const kT*
 template <typename kT, typename count_t>
 __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerBlock) {
     const ushort numThreads = blockDim.x;
-    const ushort threadId = threadIdx.x; // TODO: compute real threadIdx.z threadIdx.y 
+    const ushort threadId = threadIdx.x;
 
     const ushort k = 16 / sizeof(kT);        // num elements in vectorized loads/stores of 16 byte words
     struct __align__(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
@@ -68,7 +68,7 @@ __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const k
 template <typename kT, typename count_t>
 __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const kT* __restrict__ src, const count_t elemsPerBlock, const ushort align) {
     const ushort numThreads = blockDim.x;
-    const ushort threadId = threadIdx.x; // TODO: compute real threadIdx.z threadIdx.y 
+    const ushort threadId = threadIdx.x; 
 
     const ushort k = 16 / sizeof(kT);        // num elements in vectorized loads/stores of 16 byte words
     struct __align__(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
@@ -94,8 +94,37 @@ __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const k
 }
 
 
+__forceinline__  __device__  void shiftIdx(const int seqLen, int &tileBaseIdx, ushort &tileSeqLen, ushort &threadBaseIdx, ushort &threadSeqLen, short shift = 0) {
+    
+    // clamp(tileShBaseIdx, 0, seqLen)
+    ushort tileShBaseIdx = (shift < tileBaseIdx) ? (tileBaseIdx - shift) : 0;
+    tileShBaseIdx = (tileBaseIdx <= seqLen + shift) ? tileShBaseIdx : seqLen;   
+
+    // clamp(tileShBaseIdx + tileShSeqLen, max(tileBaseIdx + tileSeqLen, 0), seqLen)
+    ushort tileShSeqLen = (shift < tileBaseIdx + tileSeqLen) ? tileBaseIdx + tileSeqLen - shift - tileShBaseIdx : 0;
+    tileShSeqLen = (tileShBaseIdx + tileShSeqLen <= seqLen) ? tileShSeqLen : seqLen - tileShBaseIdx;
+
+    // clamp(tileShBaseIdx + threadShBaseIdx, 0, tileShSeqLen)
+    shift = (tileBaseIdx < shift) ? shift - tileBaseIdx : 0;
+    ushort threadShBaseIdx = (shift < threadBaseIdx) ? (threadBaseIdx - shift) : 0;
+    threadShBaseIdx = (threadBaseIdx <= tileShSeqLen + shift) ? threadShBaseIdx : tileShSeqLen;   
+
+    // clamp(threadShBaseIdx + threadShSeqLen, max(threadBaseIdx + threadSeqLen, 0), tileShSeqLen)
+    ushort threadShSeqLen = (shift < threadBaseIdx + threadSeqLen) ? threadBaseIdx + threadSeqLen - shift - threadShBaseIdx : 0;
+    threadShSeqLen = (threadShBaseIdx + threadShSeqLen <= tileShSeqLen) ? threadShSeqLen : tileShSeqLen - threadShBaseIdx;
+
+    tileBaseIdx = tileShBaseIdx;
+    tileSeqLen = tileShSeqLen;
+    threadBaseIdx = threadShBaseIdx;
+    threadSeqLen = threadShSeqLen;
+}
+
+
 template <typename kT, int memcode>
-__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, const int tileBaseIdx, const ushort tileSeqLen, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread) {
+__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, int tileBaseIdx, ushort tileSeqLen, ushort threadBaseIdx, ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread, const short shift = 0) {
+    if (shift == -1) shiftIdx(seqLen, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, -1);
+    else if (shift == 1) shiftIdx(seqLen, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, 1);
+    else if (shift != 0) assert(false && "Not compiled for shift outside of {-1,0,1}");
 
     if (memcode==0) {
         copy_naive(dst, &src[tileBaseIdx + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
@@ -132,8 +161,8 @@ __forceinline__  __device__  void store(kT* dst, const kT* src, const int seqLen
 
 
 template <typename kT, int memcode>
-__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread) {
-    load<kT, memcode>(dst, src, seqLen, smem, 0, seqLen, threadBaseIdx, threadSeqLen, rev, fill, maxElemsPerThread);
+__forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen, kT* smem, const ushort threadBaseIdx, const ushort threadSeqLen, const bool rev, const kT fill, const ushort maxElemsPerThread, const short shift = 0) {
+    load<kT, memcode>(dst, src, seqLen, smem, 0, seqLen, threadBaseIdx, threadSeqLen, rev, fill, maxElemsPerThread, shift);
 }
 
 template <typename kT, int memcode>

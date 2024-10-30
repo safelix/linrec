@@ -27,8 +27,10 @@ CUDA_FLAGS = [
 
     # Options for passing specific phase options
     # -Xptxas: options for ptxas, the PTX optimizing assembler.
+    #"-Xptxas -dlcm=cs",                        # Default cache modifier on global/generic load
+    #"-Xptxas -dscm=cs",                        # Default cache modifier on global/generic store
     "-Xptxas -v",                               # Enable verbose mode which prints code generation statistics.
-    #"-Xptxas -regUsageLevel=5",                 # Lower values inhibit optimizations that aggressively increase register usage (BETA).
+    #"-Xptxas -regUsageLevel=5",                # Lower values inhibit optimizations that aggressively increase register usage (BETA).
     "-Xptxas -warn-spills",                     # Warning if registers are spilled to local memory.
     "-Xptxas -warn-lmem-usage",                 # Warning if local memory is used.
     #"-Xptxas -Werror",                         # Make all warnings into errors.

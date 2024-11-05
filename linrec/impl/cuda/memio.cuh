@@ -97,7 +97,7 @@ __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const k
 __forceinline__  __device__  void shiftIdx(const int seqLen, int &tileBaseIdx, ushort &tileSeqLen, ushort &threadBaseIdx, ushort &threadSeqLen, short shift = 0) {
     
     // clamp(tileShBaseIdx, 0, seqLen)
-    ushort tileShBaseIdx = (shift < tileBaseIdx) ? (tileBaseIdx - shift) : 0;
+    int tileShBaseIdx = (shift < tileBaseIdx) ? (tileBaseIdx - shift) : 0;
     tileShBaseIdx = (tileBaseIdx <= seqLen + shift) ? tileShBaseIdx : seqLen;   
 
     // clamp(tileShBaseIdx + tileShSeqLen, max(tileBaseIdx + tileSeqLen, 0), seqLen)

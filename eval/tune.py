@@ -1,53 +1,23 @@
 import torch
-from triton.testing import Benchmark, Mark, do_bench
-from utils import execption2nan, meminit, memio, memio_limit
+from functools import partial
+from utils import execption2nan, memio_limit
+from test import test
+from bench import bench
 
 import add_linrec_to_path
-from linrec.impl.cuda import build
-_C = build.extension()
-
-
-@execption2nan(warn=True)
-def bench(stmt, throughput=False, **memargs):
-
-    data = meminit(**memargs)
-
-    if stmt in [memio_limit, 'memio_limit']:
-        ms, bytes = memio_limit(**memargs)
-    else:
-        with torch.cuda.device(memargs.get('device', None)):
-            ms = do_bench(lambda: stmt(*data))#, warmup=50, rep=1000)
-        bytes = memio(stmt, data)
-    del data
-
-    if throughput: # throughput
-        return (bytes * 1e-9) / (ms * 1e-3) # GB/s
-    return ms
-
-@execption2nan()
-def test(stmt, ref, **memargs):
-    data = meminit(**memargs)
-
-    out = stmt(*data)
-    sol = ref(*data)
-    del data
-
-    out = out if isinstance(out, torch.Tensor) else torch.stack(out)
-    sol = sol if isinstance(sol, torch.Tensor) else torch.stack(sol)
-
-    return (sol - out).abs().max().item()
+from linrec.impl.cuda import ops as cuops
 
 
 if __name__ == '__main__':
     import pandas as pd
     from argparse import ArgumentParser
-    from functools import partial
+    from triton.testing import Benchmark, Mark
 
     parser = ArgumentParser()
     impls = ['linrec_tile_fwd', 'linrec_tile_bwd', 'linrec_pipe_fwd', 'linrec_pipe_bwd']
     parser.add_argument('impl', choices=impls, help='Which implementation to tune.')
-    parser.add_argument('--seqlen_min', type=int, default=4, help='Minimal sequence length to tune with.')
-    parser.add_argument('--seqlen_max', type=int, default=14, help='Maximal sequence length to tune with.')
+    parser.add_argument('--seqlen_min', type=int, default=4, help='Minimal sequence length to tune with (log2).')
+    parser.add_argument('--seqlen_max', type=int, default=16, help='Maximal sequence length to tune with (log2).')
     parser.add_argument('--n_batches', type=int, default=-1, help='Number of batches to tune with (-1 = Shared Multiprocessors).')
     parser.add_argument('--n_channels', type=int, default=100, help='Number of channels to tune with.')
     parser.add_argument('--reverse', action='store_true', help='Use reverse scan to tune with.')
@@ -59,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--algocode', type=int, default=None, help='Value to filter algocode with.')
     parser.add_argument('--seed', type=int, default=12334567890, help='Seed to generate data with.')
     parser.add_argument('--device', type=int, default=0, help='Device id to tune on.')
+    parser.add_argument('--showplots', action='store_true', help='Whether to show plots.')
     parser.add_argument('--csv', action='store_true', help='Store results as CSV.')
     args = parser.parse_args()
 
@@ -70,35 +41,38 @@ if __name__ == '__main__':
     seqlens = [2**i for i in range(args.seqlen_min, args.seqlen_max+1)]
     memargs = dict(n_batches=args.n_batches if (args.n_batches > 0) else sm,
                 n_channels=args.n_channels,
-                fwd=args.fwd, 
                 dtype=torch.float32,
                 device=args.device,
-                seed=args.seed)
+                seed=args.seed,
+                grad=None if args.fwd else 'bwd', 
+                fwd=cuops.linrec_ref_fwd)
     
     iolimit = [bench(memio_limit, throughput=args.throughput, **dict(seqlen=seqlen, **memargs)) for seqlen in seqlens]
     
     # Prepare Statements
-    func = partial(getattr(_C, args.impl), reverse=args.reverse)
-    ref =  partial(getattr(_C, f'linrec_ref_{args.impl[-3:]}'), reverse=args.reverse)
+    func = partial(getattr(cuops, args.impl), reverse=args.reverse)
+    #ref =  partial(getattr(cuops, f'linrec_ref_{args.impl[-3:]}'), reverse=args.reverse)
+    ref =  partial(getattr(cuops, f'linrec_ref_{args.impl[-3:]}'), reverse=args.reverse)
 
-    index, stmts = [], []
-    for p in dict((tuple(c), None) for c in _C.config_list): # orderd dict to make _C.config_list unique
-        kwargs = dict(zip(_C.config_names, p))
+    configkeys, stmts = [], [] # prepare config keys and statements
+    for p in cuops.config_list:
+        config = dict(zip(cuops.config_names, p))
 
-        index_key, drop_stmt = {}, False
-        for arg in kwargs:
-            if getattr(args, arg) is None:
-                index_key[arg] = kwargs[arg]
-            elif getattr(args, arg) != kwargs[arg]:
-                drop_stmt = drop_stmt or True
+        # filter configs from parsed arguments
+        configkey, drop_stmt = {}, False
+        for name in config.keys():
+            if getattr(args, name) is None:
+                configkey[name] = config[name] # drop key if name in args
+            elif getattr(args, name) != config[name]:
+                drop_stmt = drop_stmt or True # drop if 
         if drop_stmt:
             continue
 
-        stmts.append(partial(func, **kwargs))
-        index.append(index_key)
+        configkeys.append(configkey)
+        stmts.append(partial(func, **config))
 
     #index, stmts = index[:2], stmts[:2]
-    index = pd.MultiIndex.from_frame(pd.DataFrame(index))
+    index = pd.MultiIndex.from_frame(pd.DataFrame(configkeys))
     stmts = pd.Series(stmts, index=index)
 
     # Execute one statment 
@@ -120,20 +94,29 @@ if __name__ == '__main__':
     )
 
     columns = pd.Index(seqlens, name='seqlen')
-    diffs = Mark(test, benchmark).run(return_df=True, ref=ref)
-    diffs = pd.DataFrame(diffs.values[:, 1:].T, columns=columns, index=index)
+    test = execption2nan()(test)
+    diffs = Mark(test, benchmark).run(return_df=True, show_plots=args.showplots, ref=ref)
+    diffs = pd.DataFrame(diffs.values[:, 1:].T, columns=columns, index=stmts.index)
     if args.csv:
         diffs.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_diffs.csv')
 
-    times = Mark(bench, benchmark).run(return_df=True, throughput=args.throughput)
-    times = pd.DataFrame(times.values[:, 1:].T, columns=columns, index=index)
+    bench = execption2nan(warn=True)(bench)
+    times = Mark(bench, benchmark).run(return_df=True, show_plots=args.showplots, throughput=args.throughput)
+    times = pd.DataFrame(times.values[:, 1:].T, columns=columns, index=stmts.index)
     if args.csv:
         times.to_csv(f'tune_{args.impl}{'_rev' if args.reverse else ''}_times.csv')
 
+
+    # Compute Max Perfomance
+    maxperfidx = times.idxmax(axis=0, skipna=True) if args.throughput else times.idxmin(axis=0, skipna=True)
+    maxperf = times.max(axis=0, skipna=True) if args.throughput else times.min(axis=0, skipna=True)
+    maxperf = pd.concat([maxperfidx.apply(pd.Series).astype(int), maxperf], axis=1).T
+    maxperf.index = stmts.index.names + ['throughput (GB/s)' if args.throughput else 'runtime (ms)']
+
     # Add iolimit to index and lmem column to data
     columns = pd.MultiIndex.from_arrays([seqlens, iolimit], names=['seqlen', 'iolimit'])
-    times = pd.DataFrame(times.values, columns=columns, index=index)
-    func_attrs = partial(getattr(_C, f'{args.impl[:-3]}attrs'), fwd=args.fwd)
+    times = pd.DataFrame(times.values, columns=columns, index=stmts.index)
+    func_attrs = partial(getattr(cuops, f'{args.impl[:-3]}attrs'), fwd=args.fwd)
     times.insert(0, ('lmem', None), stmts.map(lambda func: func_attrs(**func.keywords)['localSizeBytes']))
     times.insert(0, ('regs', None), stmts.map(lambda func: func_attrs(**func.keywords)['numRegs']))
 
@@ -144,3 +127,5 @@ if __name__ == '__main__':
     print('\n################## Benchmark ##################')
     print(times.to_string(float_format=lambda x: f'{x:.1f}', max_rows=times.shape[0], max_cols=times.shape[1]))
 
+    print('Max performance:')
+    print(maxperf.to_string(float_format=lambda x: f'{x:.1f}', max_rows=maxperf.shape[0], max_cols=maxperf.shape[1]))        

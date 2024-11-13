@@ -74,16 +74,17 @@ __forceinline__  __device__  void copy_coalesced16(kT* __restrict__ dst, const k
     struct __align__(k * sizeof(kT))  vec {kT data[k];};  // wrapper type for vectorized loads/stores of 16 byte words
 
     // copy elementwise until dst[i] and src[i] are aligned
-    //assert(((long) &src[align] % 16 == 0) && "Dst is not aligned.");
-    //assert(((long) &dst[align] % 16 == 0) && "Src is not aligned.");
+    //assert(((long) &src[offset] % 16 == 0) && "Dst is not aligned.");
+    //assert(((long) &dst[offset] % 16 == 0) && "Src is not aligned.");
 
-    for (count_t i = threadId; i < align; i += numThreads) {
+    const ushort offset = k - align;
+    for (count_t i = threadId; i < offset; i += numThreads) {
         dst[i] = src[i];
     }
 
     // copy as vectors so long as they fit into elemsPerBlock
-    count_t elemsPerBlockVec = elemsPerBlock - ((elemsPerBlock - align) % k);
-    for (count_t i = align + k*threadId; i < elemsPerBlockVec; i += k*numThreads) {
+    count_t elemsPerBlockVec = elemsPerBlock - ((elemsPerBlock - offset) % k);
+    for (count_t i = offset + k*threadId; i < elemsPerBlockVec; i += k*numThreads) {
         *reinterpret_cast<vec*>(&dst[i]) = *reinterpret_cast<const vec*>(&src[i]);
     }
 
@@ -142,11 +143,10 @@ __forceinline__  __device__  void load(kT* dst, const kT* src, const int seqLen,
         copy_naive(dst, &smem[threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     } else if (memcode==2) {
         __syncthreads(); // avoid race condition
-        const ushort offset = ((long) &src[tileBaseIdx] % 16) / sizeof(kT);
-        const ushort align = 16 / sizeof(kT) - offset;
-        copy_coalesced16(&smem[offset], &src[tileBaseIdx], tileSeqLen, align);
-        __syncthreads();
-        copy_naive(dst, &smem[offset + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
+        const ushort align = ((long) &src[tileBaseIdx] % 16) / sizeof(kT);
+        copy_coalesced16(&smem[align], &src[tileBaseIdx], tileSeqLen, align);
+        __syncthreads(); // avoid race condition
+        copy_naive(dst, &smem[align + threadBaseIdx], threadSeqLen, rev, fill, maxElemsPerThread);
     }
 }
 

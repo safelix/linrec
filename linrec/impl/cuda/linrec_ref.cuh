@@ -10,11 +10,14 @@ __global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* ou
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    
+    inputs = &inputs[seqBaseIdx];
+    coeffs = &coeffs[seqBaseIdx];
+    outputs = &outputs[seqBaseIdx];
+
     // Linear Recursion
-    outputs[seqBaseIdx] = inputs[seqBaseIdx];   // set start element
-    for(int i = 1; i < seqLen; i++) {           // linear scan
-        outputs[seqBaseIdx + i] = outputs[seqBaseIdx + i - 1] * coeffs[seqBaseIdx + i] + inputs[seqBaseIdx + i];
+    outputs[0] = inputs[0];                         // set start element
+    for(int i = 1; i < seqLen; i++) {               // linear scan
+        outputs[i] = outputs[i-1] * coeffs[i] + inputs[i];
     }
 }
 
@@ -22,19 +25,24 @@ template <typename kT>
 __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x + (seqLen - 1); // threads block process channels independently: inputs[seqBaseIdx + i]
-    
+    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
+    d_outputs = &d_outputs[seqBaseIdx];
+    coeffs = &coeffs[seqBaseIdx];
+    outputs = &outputs[seqBaseIdx];
+    d_inputs = &d_inputs[seqBaseIdx];
+    d_coeffs = &d_coeffs[seqBaseIdx];
+
     // Linear Backwards Recursion
-    d_inputs[seqBaseIdx] = d_outputs[seqBaseIdx];   // set start d_input
-    for(int i = 1; i < seqLen; i++) {               // linear scan
-        d_inputs[seqBaseIdx - i] = d_inputs[seqBaseIdx - i + 1] * coeffs[seqBaseIdx - i] + d_outputs[seqBaseIdx - i];
+    d_inputs[seqLen-1] = d_outputs[seqLen-1];       // set start d_input
+    for(int i = seqLen-2; i >= 0; i--) {            // linear scan
+        d_inputs[i] = d_inputs[i+1] * coeffs[i+1] + d_outputs[i];
     }
 
     // element-wise shifted multiplication
-    for(int i = 0; i < seqLen-1; i++) {             // no scan
-        d_coeffs[seqBaseIdx - i] = outputs[seqBaseIdx - i - 1] * d_inputs[seqBaseIdx - i];
+    for(int i = 1; i < seqLen; i++) {               // no scan
+        d_coeffs[i] = outputs[i-1] * d_inputs[i];
     }
-    d_coeffs[seqBaseIdx - (seqLen - 1)] = 0;      // set last d_coeff
+    d_coeffs[0] = 0;                                // set remaining d_coeff
 }
 
 
@@ -43,40 +51,45 @@ __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, con
 */
 
 template <typename kT>
-__global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen, const bool reverse) {
+__global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen, const bool rev) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
     int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    
-    int s = reverse ? -1 : 1;  // if reverse: start at end and subtract index (flip sign)
-    seqBaseIdx = seqBaseIdx + (reverse ? (seqLen - 1) : 0); // inputs[seqBaseIdx ± i]
+    inputs = &inputs[seqBaseIdx];
+    coeffs = &coeffs[seqBaseIdx];
+    outputs = &outputs[seqBaseIdx];
 
     // Linear Recursion
-    outputs[seqBaseIdx] = inputs[seqBaseIdx];   // set start element
-    for(int i = 1; i < seqLen; i++) {           // linear scan
-        outputs[seqBaseIdx + s*i] = outputs[seqBaseIdx + s*i - s*1] * coeffs[seqBaseIdx + s*i] + inputs[seqBaseIdx + s*i];
+    outputs[!rev ? 0 : (seqLen-1)] = inputs[!rev ? 0 : (seqLen-1)];     // set start element
+    
+    
+    for(int i = !rev ? 1:(seqLen-2); !rev ? (i < seqLen) : (0 <= i); i += !rev ? 1:-1) {          // linear scan
+        outputs[i] = outputs[i - (!rev ? 1:-1)] * coeffs[i] + inputs[i];
     }
 }
 
 template <typename kT>
-__global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool reverse) {
+__global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool rev) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x + (seqLen - 1); // threads block process channels independently: inputs[seqBaseIdx + i]
-    
-    int s = reverse ? -1 : 1;  // if reverse: start at front and add index (flip sign)
-    seqBaseIdx = seqBaseIdx - (reverse ? (seqLen - 1) : 0); // inputs[seqBaseIdx ± i]
+    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
+    d_outputs = &d_outputs[seqBaseIdx];
+    coeffs = &coeffs[seqBaseIdx];
+    outputs = &outputs[seqBaseIdx];
+    d_inputs = &d_inputs[seqBaseIdx];
+    d_coeffs = &d_coeffs[seqBaseIdx];
 
     // Linear Backwards Recursion
-    d_inputs[seqBaseIdx] = d_outputs[seqBaseIdx];   // set start d_input
-    for(int i = 1; i < seqLen; i++) {               // linear scan
-        d_inputs[seqBaseIdx - s*i] = d_inputs[seqBaseIdx - s*i + s*1] * coeffs[seqBaseIdx - s*i] + d_outputs[seqBaseIdx - s*i];
+    d_inputs[!rev ? (seqLen-1) : 0] = d_outputs[!rev ? (seqLen-1) : 0];                         // set start element
+
+    for(int i = !rev ? (seqLen-2):1; !rev ? (0<=i):(i<seqLen); i -= !rev ? 1:-1) {          // linear scan
+        d_inputs[i] = d_inputs[i + (!rev ? 1:-1)] * coeffs[i + (!rev ? 1:-1)] + d_outputs[i];
     }
 
     // element-wise shifted multiplication
-    for(int i = 0; i < seqLen-1; i++) {             // no scan
-        d_coeffs[seqBaseIdx - s*i] = outputs[seqBaseIdx - s*i - s*1] * d_inputs[seqBaseIdx - s*i];
+    for(int i = !rev ? 1:0; i < seqLen - (!rev ? 0:-1); i++) {             // no scan
+        d_coeffs[i] = outputs[i - (!rev ? 1:-1)] * d_inputs[i];
     }
-    d_coeffs[seqBaseIdx - s*(seqLen - 1)] = 0;      // set last d_coeff
+    d_coeffs[!rev ? 0:(seqLen-1)] = 0;      // set remaining d_coeff
 }
 

@@ -7,26 +7,26 @@ __all__ = ["linrec_ref, linrec_hop"]
 ### Eager Reference Implementations
 def linrec_ref_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
     outputs = torch.zeros_like(inputs)
-    if not reverse:
-        outputs[..., 0] = inputs[..., 0]
-        for i in range(1, inputs.shape[-1], 1):
-            outputs[..., i] = outputs[..., i-1].clone() * coeffs[..., i] + inputs[..., i]
-    else:
-        outputs[..., -1] = inputs[..., -1]
-        for i in range(inputs.shape[-1] - 1, 0, -1):
-            outputs[..., i-1] = outputs[..., i].clone() * coeffs[..., i-1] + inputs[..., i-1]
+    prev = torch.zeros_like(outputs[..., 0])
+
+    for i in range(0, inputs.shape[-1])[::-1 if reverse else 1]:
+        outputs[..., i] = prev * coeffs[..., i] + inputs[..., i]
+        prev = outputs[..., i].clone()
+        
     return outputs
 
+def shift(input, shifts, fillval=0):
+    # torch.roll without the copy of the wrap-around section
+    if shifts > 0:
+        output = torch.cat([torch.full_like(input[..., :shifts], fillval), input[..., :-shifts]], dim=-1)
+    if shifts < 0:
+        output = torch.cat([input[..., -shifts:], torch.full_like(input[..., shifts:], fillval)], dim=-1)
+    return output
 
 def linrec_ref_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse=False):
+    coeffs = shift(coeffs, -1 if not reverse else 1, fillval=0)
     d_inputs = linrec_ref_fwd(inputs=d_outputs, coeffs=coeffs, reverse=(not reverse))
-
-    d_coeffs = torch.zeros_like(coeffs)
-    if not reverse:
-        d_coeffs[..., 1:] = outputs[..., :-1] * d_inputs[..., 1:]
-    else:
-        d_coeffs[..., :-1] = outputs[..., 1:] * d_inputs[..., :-1]
-    
+    d_coeffs =  d_inputs * shift(outputs, shifts=1 if not reverse else -1, fillval=0)
     return d_inputs, d_coeffs
 
 
@@ -65,14 +65,9 @@ def linrec_hop_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
     return outputs
 
 def linrec_hop_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse=False):
+    coeffs = shift(coeffs, -1 if not reverse else 1, fillval=0)
     d_inputs = linrec_hop_fwd(inputs=d_outputs, coeffs=coeffs, reverse=(not reverse))
-
-    d_coeffs = torch.zeros_like(coeffs)
-    if not reverse:
-        d_coeffs[..., 1:] = outputs[..., :-1] * d_inputs[..., 1:]
-    else:
-        d_coeffs[..., :-1] = outputs[..., 1:] * d_inputs[..., :-1]
-    
+    d_coeffs =  d_inputs * shift(outputs, shifts=1 if not reverse else -1, fillval=0)
     return d_inputs, d_coeffs
 
 

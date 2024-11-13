@@ -224,8 +224,7 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     kT threadAccDInput[kMaxElemsPerThread];
     kT threadAccCoeff[kMaxElemsPerThread];
     memio::load<kT, memcode>(threadAccDInput, d_outputs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread);
-    memio::load<kT, memcode>(threadAccCoeff, coeffs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(1), kMaxElemsPerThread);
-
+    memio::load<kT, memcode>(threadAccCoeff, coeffs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(1), kMaxElemsPerThread, !rev ? -1 : 1);
 
     // Compute parallel scan on a tile (=subsequence) that fits into one thread block 
     if (algocode >= 1) { // level 1,2,3 of block-wise parallel scan
@@ -239,8 +238,7 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     //
     // Load outputs shifted to the right or if reverse shifted to the left
     kT threadDCoeff[kMaxElemsPerThread];
-    short shift = !rev ? 1 : -1;
-    memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, shift);
+    memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, !rev ? 1 : -1);
     
     // Compute shifted element-wise multiplication
     for(ushort i = 0; 0 < algocode && i < kMaxElemsPerThread; i++) {

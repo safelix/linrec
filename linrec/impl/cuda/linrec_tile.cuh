@@ -233,7 +233,7 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     }
 
     // Store outputs of Back Propoagation Through Time
-    memio::store<kT, memcode>(d_inputs, threadAccDInput, seqLen, smem, 0, seqLen, threadBaseIdx, threadSeqLen, !rev);
+    memio::store<kT, memcode>(d_inputs, threadAccDInput, seqLen, smem, threadBaseIdx, threadSeqLen, !rev);
     
     
     //

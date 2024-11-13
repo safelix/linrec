@@ -110,7 +110,7 @@ if __name__ == '__main__':
     # Compute Max Perfomance
     maxperfidx = times.idxmax(axis=0, skipna=True) if args.throughput else times.idxmin(axis=0, skipna=True)
     maxperf = times.max(axis=0, skipna=True) if args.throughput else times.min(axis=0, skipna=True)
-    maxperf = pd.concat([maxperfidx.apply(pd.Series).astype(int), maxperf], axis=1).T
+    maxperf = pd.concat([maxperfidx.apply(pd.Series).astype(int, errors='ignore'), maxperf], axis=1).T
     maxperf.index = stmts.index.names + ['throughput (GB/s)' if args.throughput else 'runtime (ms)']
 
     # Add iolimit to index and lmem column to data

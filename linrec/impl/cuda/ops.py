@@ -1,7 +1,7 @@
 import torch
 from torch.autograd.function import FunctionCtx
 try:
-    from ... import _C # via setup.py
+    from ... import _C # CUDAExtension via setup.py
 except ImportError:
    from .build import extension
    _C = extension()

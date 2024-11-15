@@ -1,8 +1,5 @@
-import os, shutil, subprocess
-import argparse, json, time
 from pathlib import Path
-from torch.utils.cpp_extension import load, load_inline
-
+from nvidia.cuda_runtime.include import __path__ as CUDA_RUNTIME_INCLUDES # .../site-packages/nvidia/cuda_runtime/include/
 
 SRC_DIR = Path(__file__).parent
 PKG_DIR = Path(__file__).parents[3]
@@ -12,7 +9,7 @@ BUILD_DIR = PKG_DIR / ".build"
 LIB_SOURCES = [str(SRC_DIR / "linrec_ref.cu"), str(SRC_DIR / "linrec_tile.cu"), str(SRC_DIR / "linrec_pipe.cu")]
 EXT_SOURCES = [str(SRC_DIR / "extension.cpp")]
 EXE_SOURCES = [str(SRC_DIR / "executable.cpp")]
-INCLUDES = [str(SRC_DIR)]
+INCLUDES = [str(SRC_DIR)] + CUDA_RUNTIME_INCLUDES
 
 
 CUDA_FLAGS = [
@@ -27,13 +24,13 @@ CUDA_FLAGS = [
 
     # Options for passing specific phase options
     # -Xptxas: options for ptxas, the PTX optimizing assembler.
-    #"-Xptxas -dlcm=cs",                        # Default cache modifier on global/generic load
-    #"-Xptxas -dscm=cs",                        # Default cache modifier on global/generic store
-    "-Xptxas -v",                               # Enable verbose mode which prints code generation statistics.
-    #"-Xptxas -regUsageLevel=5",                # Lower values inhibit optimizations that aggressively increase register usage (BETA).
-    "-Xptxas -warn-spills",                     # Warning if registers are spilled to local memory.
-    "-Xptxas -warn-lmem-usage",                 # Warning if local memory is used.
-    #"-Xptxas -Werror",                         # Make all warnings into errors.
+    #"-Xptxas", "-dlcm=cs",                        # Default cache modifier on global/generic load
+    #"-Xptxas", "-dscm=cs",                        # Default cache modifier on global/generic store
+    "-Xptxas", "-v",                               # Enable verbose mode which prints code generation statistics.
+    #"-Xptxas", "-regUsageLevel=5",                # Lower values inhibit optimizations that aggressively increase register usage (BETA).
+    "-Xptxas", "-warn-spills",                     # Warning if registers are spilled to local memory.
+    "-Xptxas", "-warn-lmem-usage",                 # Warning if local memory is used.
+    #"-Xptxas", "-Werror",                         # Make all warnings into errors.
 
     # Miscellaneous options for guiding the compiler driver
     "--keep",                                   # Keep all intermediate files that are generated during internal compilation steps.
@@ -57,9 +54,12 @@ CPP_FLAGS = [
 
 
 def extension(extra_cflags=[], extra_cuda_cflags=[], verbose=False, clean=False):
+    import time
+    from torch.utils.cpp_extension import load
     make_build_dir(clean=clean)
+    start = time.perf_counter()
+
     try: 
-        start = time.perf_counter()
         ext = load(
             name="pylinrec",
             sources=LIB_SOURCES + EXT_SOURCES,
@@ -69,20 +69,24 @@ def extension(extra_cflags=[], extra_cuda_cflags=[], verbose=False, clean=False)
             build_directory=str(BUILD_DIR),
             verbose=verbose,
         )
-        if verbose:
-            duration = round(time.perf_counter() - start)
-            print(f'Took {duration // 60}:{duration % 60:02d} min to build.')
-        create_compile_commands(which="ext", verbose=verbose)
-        return ext
-    except Exception as e: # create_compile commands from build.ninja
+    except Exception as e: # create_compile even if build failed
         create_compile_commands(which="ext", verbose=verbose)
         raise e
     
+    if verbose:
+        duration = round(time.perf_counter() - start)
+        print(f'Took {duration // 60}:{duration % 60:02d} min to build.')
+    create_compile_commands(which="ext", verbose=verbose)
+    return ext
+    
 
 def executable(extra_cflags=[], extra_cuda_cflags=[], verbose=False, clean=False):
+    import time
+    from torch.utils.cpp_extension import load
     make_build_dir(clean=clean)
+    start = time.perf_counter()
+
     try:
-        start = time.perf_counter()
         exe = load(
             name="cpplinrec",
             sources=LIB_SOURCES + EXE_SOURCES,
@@ -94,24 +98,26 @@ def executable(extra_cflags=[], extra_cuda_cflags=[], verbose=False, clean=False
             is_standalone=True,
             verbose=verbose,
         )
-
-        if verbose:
-            duration = round(time.perf_counter() - start)
-            print(f'Took {duration // 60}:{duration % 60:02d} min to build.')
-        create_compile_commands(which="exe", verbose=verbose)
-        return exe
-    except Exception as e: # create_compile commands from build.ninja
+    except Exception as e: # create_compile even if build failed
         create_compile_commands(which="exe", verbose=verbose)
         raise e
+    
+    if verbose:
+        duration = round(time.perf_counter() - start)
+        print(f'Took {duration // 60}:{duration % 60:02d} min to build.')
+    create_compile_commands(which="exe", verbose=verbose)
+    return exe
 
 
 def make_build_dir(clean=False):
+    import os, shutil
     if clean:
         shutil.rmtree(BUILD_DIR, ignore_errors=True)
     os.makedirs(BUILD_DIR, exist_ok=True)
-
+    return
 
 def create_compile_commands(which="", verbose=True):
+    import os, json, subprocess
     assert which in ["exe", "ext", ""]
 
     if which in ["exe", "ext"]:
@@ -144,6 +150,7 @@ def create_compile_commands(which="", verbose=True):
 
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "which", choices=["exe", "executable", "ext", "extension", "both"], nargs="?", default="both"

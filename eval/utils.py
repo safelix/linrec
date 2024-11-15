@@ -2,12 +2,6 @@ import torch
 import warnings
 import triton.testing
 
-
-import add_linrec_to_path
-from linrec.impl.cuda import build
-_C = build.extension()
-
-
 def execption2nan(warn=False):
     def decorator(func):
         def wrappedfunc(*args, **kwargs):

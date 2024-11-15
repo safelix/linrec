@@ -42,7 +42,7 @@ std::string printConfig(T1 name, T2 value) {
 template <typename T1, typename T2, size_t N1, size_t N2>
 std::string printConfig(std::array<T1, N1> names, std::array<T2, N2> values) {
   std::stringstream ss;
-  for (int i = 0; i < values.size(); i++) {
+  for (size_t i = 0; i < values.size(); i++) {
     if (i < names.size()) ss << names[i] << "=";
     if (i < values.size()) ss << values[i];
     if (i + 1 < values.size()) ss << ", ";
@@ -80,7 +80,7 @@ constexpr auto product(const std::array<T, Ns>&... arrays) {
 
     // compute cumulative Ns
     std::array<size_t, cols+1> cumNs = {1, arrays.size()...};
-    for (int i = 1; i < cols+1; i++){
+    for (size_t i = 1; i < cols+1; i++){
         cumNs[i] = cumNs[i-1] * cumNs[i];
     }
 
@@ -97,9 +97,9 @@ template <typename T, size_t... Ns>
 constexpr auto concat(const std::array<T, Ns> &...arrays) {
     std::array<T, (Ns + ...)> out{};
 
-    int i = 0;
+    size_t i = 0;
     ([&](auto array){
-        for(int j = 0; j < array.size(); j++) {
+        for(size_t j = 0; j < array.size(); j++) {
             out[i++] = array[j];
         }
     }(arrays), ...);

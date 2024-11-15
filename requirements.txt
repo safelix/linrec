@@ -1,0 +1,12 @@
+# Install requires
+torch
+nvidia-cuda-runtime-cu12
+
+# Build requires
+ninja
+
+# Eval requires
+triton
+numpy
+pandas
+matplotlib

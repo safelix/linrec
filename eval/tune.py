@@ -5,7 +5,7 @@ from test import test
 from bench import bench
 
 import add_linrec_to_path
-from linrec.impl.cuda import ops as cuops
+from linrec.impl.cuda.ops import _C as cuops
 
 
 if __name__ == '__main__':

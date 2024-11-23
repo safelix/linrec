@@ -3,13 +3,12 @@ from torch.autograd import grad
 import matplotlib.pyplot as plt
 
 import add_linrec_to_path
-from linrec.impl.cuda import ops as cuops
-from linrec.impl.python import ops as pyops
+from linrec.impl.cuda.ops import _C as cuops
 
 dtype = torch.float32
 device = torch.device('cuda:0')
 kwargs = dict(reverse=False, kMaxElemsPerThread=4, kMaxThreadsPerBlock=32, memcode=0, algocode=3)
-print(cuops.linrec_tile_attrs(fwd=False, **kwargs))
+print(cuops.linrec_pipe_attrs(fwd=False, **kwargs))
 
 shape = (140*100, 16 * 1024)
 inputs = 1 * torch.randn(shape, dtype=dtype, device=device, requires_grad=True)

@@ -23,7 +23,7 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     } __syncwarp(); // avoid divergence
 
     // Determine Tile Layout
-    const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
+    const ushort numThreads = blockDim.x;
     const ushort threadIdrev = !rev ? threadIdx.x : (numThreads - threadIdx.x - 1);                     // thread index, reversed to load reversed
     const ushort elemsPerTile = kMaxElemsPerThread * numThreads;                                        // the default number of elements per tile
 
@@ -89,7 +89,7 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     } __syncwarp(); // avoid divergence
 
     // Determine Tile Layout
-    const ushort numThreads = kMaxThreadsPerBlock; // blockDim.x;
+    const ushort numThreads = blockDim.x;
     const ushort threadIdrev = !rev ? (numThreads - threadIdx.x - 1) : threadIdx.x;                     // reversed thread index to load reversed by default
     const ushort elemsPerTile = kMaxElemsPerThread * numThreads;                                        // the default number of elements per tile
 

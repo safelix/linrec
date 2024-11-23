@@ -42,7 +42,7 @@ __forceinline__  __device__  void _linrec_scan_tile_parallel_(kT* threadAccOutpu
     const ushort numWarps = ceildiv(numThreads, kMaxThreadsPerWarp);
     const ushort lastWarpSize = numThreads - kMaxThreadsPerWarp * (numWarps-1);
     const ushort thisWarpSize = (warpId==numWarps-1) ? lastWarpSize : kMaxThreadsPerWarp;
-    assert((warpId==numWarps-1) ? (thisWarpSize == kMaxThreadsPerWarp) : true && "Error in thisWarpSize computation.");
+    assert((warpId==numWarps-1) ? (thisWarpSize == lastWarpSize) : true && "Error in thisWarpSize computation.");
     
     // for level 3: warp 0 needs to be big enough to accomodate transition elements between all warps
     assert((warpId == 0) ? thisWarpSize >= numWarps : true && "warp 0 needs to accomodate transition elements between all warps");
@@ -75,7 +75,7 @@ __forceinline__  __device__  void _linrec_scan_tile_parallel_(kT* threadAccOutpu
         warpAccCoeff  = (laneId < delta) ? warpAccCoeff  : prevAccCoeff * warpAccCoeff;
     }
 
-    for (ushort i = 0; i < threadSeqLen; i++) { // distribute accumulates into thread elements
+    for (ushort i = 0; i < threadSeqLen; i++) { // distribute accumulates into thread-local array
         threadAccOutput[i] = warpAccOutput * threadAccCoeff[i] + threadAccOutput[i];
         threadAccCoeff[i]  = warpAccCoeff * threadAccCoeff[i];
     }
@@ -117,7 +117,6 @@ __forceinline__  __device__  void _linrec_scan_tile_parallel_(kT* threadAccOutpu
 template <typename kT, ushort kMaxElemsPerThread, ushort kMaxThreadsPerWarp, ushort kMaxThreadsPerBlock, int memcode, int algocode>
 __global__ void __launch_bounds__(kMaxThreadsPerBlock)
 linrec_tile_fwd_kernel_naive(const kT* inputs, const kT* coeffs, kT* outputs, int const seqLen) {
-    extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
 
     // Layout: dim=(X,L), strides=(L,1)
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
@@ -126,9 +125,9 @@ linrec_tile_fwd_kernel_naive(const kT* inputs, const kT* coeffs, kT* outputs, in
     outputs = &outputs[seqBaseIdx];
 
     // Determine Tile Layout
-    const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
+    const ushort numThreads = blockDim.x;
     const ushort threadId = threadIdx.x;                                                            // index of current thread
-    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
+    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute seqLen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadId - (numThreads - numTailThreads);                        // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
@@ -168,9 +167,9 @@ linrec_tile_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     outputs = &outputs[seqBaseIdx];
 
     // Determine Tile Layout
-    const ushort numThreads = kMaxThreadsPerBlock; //blockDim.x;
+    const ushort numThreads = blockDim.x;
     const ushort threadIdrev = !rev ? threadIdx.x : (numThreads - threadIdx.x - 1);                 // thread index, reversed to load reversed
-    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
+    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute seqLen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread
@@ -210,9 +209,9 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     d_coeffs = &d_coeffs[seqBaseIdx];
 
     // Determine Tile Layout
-    const ushort numThreads = kMaxThreadsPerBlock; // blockDim.x;
+    const ushort numThreads = blockDim.x;
     const ushort threadIdrev = !rev ? (numThreads - threadIdx.x - 1) : threadIdx.x;                 // reversed thread index to load reversed by default
-    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute subseqlen among numThreads
+    const ushort elemsPerThread = ceildiv(seqLen, (int) numThreads);                                // distribute seqLen among numThreads
     const ushort numTailThreads = numThreads * elemsPerThread - seqLen;                             // last numTailThreads have one elem less
     const int threadTailId = (int) threadIdrev - (numThreads - numTailThreads);                     // tail start indicated by ..., 0, 1, 2, ...
     const ushort threadSeqLen = (threadTailId < 0) ? elemsPerThread : (elemsPerThread-1);           // sequence length processed by every thread

@@ -66,7 +66,7 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
 
         // determine run-time arguments
         int blocks = numseq;
-        int threads = kMaxThreadsPerBlock; // TODO: std::min(seqlen, kMaxThreadsPerBlock);
+        int threads = std::min(ceildiv(seqlen, kMaxElemsPerThread), kMaxThreadsPerBlock);
         int smem = (memcode > 0) ? seqlen * sizeof(float) : 0;
 
         // configure kernel run-time properties: 
@@ -147,7 +147,7 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
         
         // determine run-time arguments
         int blocks = numseq;
-        int threads = kMaxThreadsPerBlock; // TODO: std::min(seqlen, kMaxThreadsPerBlock);
+        int threads = std::min(ceildiv(seqlen, kMaxElemsPerThread), kMaxThreadsPerBlock);
         int smem = (memcode > 0) ? seqlen * sizeof(float) : 0;
 
         // configure kernel run-time properties: 

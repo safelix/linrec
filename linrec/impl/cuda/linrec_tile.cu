@@ -41,9 +41,9 @@ Tensor linrec_tile_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
     int memcode = get(options, "memcode", 0);
     int algocode = get(options, "algocode", 3);
 
-    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 8); 
+    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 4); 
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
-    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 256); 
+    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 128); 
 
     // Dispatch templated function: instantiate compile-time configuration
     auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
@@ -122,9 +122,9 @@ std::tuple<Tensor, Tensor> linrec_tile_bwd(const Tensor &d_outputs, const Tensor
     int memcode = get(options, "memcode", 0);
     int algocode = get(options, "algocode", 3);
 
-    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 8); 
+    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 4); 
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
-    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 256); 
+    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 128); 
 
     // Dispatch templated function: instantiate compile-time configuration
     auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};
@@ -184,9 +184,9 @@ std::map<std::string, int> linrec_tile_attrs(const bool fwd, const Option& optio
     int memcode = get(options, "memcode", 0);
     int algocode = get(options, "algocode", 3);
 
-    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 8); 
+    int kMaxElemsPerThread = get(options, "kMaxElemsPerThread", 4); 
     int kMaxThreadsPerWarp = get(options, "kMaxThreadsPerWarp", 32); 
-    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 256); 
+    int kMaxThreadsPerBlock = get(options, "kMaxThreadsPerBlock", 128); 
 
     // Dispatch templated function: instantiate compile-time configuration
     auto config = std::array{kMaxElemsPerThread, kMaxThreadsPerWarp, kMaxThreadsPerBlock, memcode, algocode};

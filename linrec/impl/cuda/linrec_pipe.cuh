@@ -135,7 +135,6 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
 
         //
         // Load outputs shifted to the right or if reverse shifted to the left
-        short shift = !rev ? 1 : -1;
         kT threadDCoeff[kMaxElemsPerThread];
         memio::load<kT, memcode>(threadDCoeff, outputs, seqLen, smem, tileBaseIdx, tileSeqLen, threadBaseIdx, threadSeqLen, !rev, kT(0), kMaxElemsPerThread, !rev ? 1 : -1);
         

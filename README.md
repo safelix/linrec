@@ -61,13 +61,13 @@ If you see the error `InvalidSpec: The package "cuda==XX" is not available for t
 ### User Installation
 Once the build environment is ready, you can simply build and install `linrec` with 
 ```
-pip install git+https://github.com/safelix/linrec.git
+pip install git+[link-to-repo.git]
 ```
 
 ### Developer Installation
 For evals and lightweight development, a quick editable install is available (clone then `pip install -e linrec[eval]`). For C++/CUDA development, accessing the code directly without installation provides more finegrained control over the compilation process (make sure to `pip uninstall linrec`). Let's get started and run the eval suite:
 ``` 
-git clone git@github.com:safelix/linrec.git
+git clone [link-to-repo.git]
 pip install -r linrec/requirements.txt
 python linrec/eval/test.py
 python linrec/eval/bench.py

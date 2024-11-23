@@ -6,6 +6,40 @@ inputs, coeffs = torch.randn(**kwargs), torch.rand(**kwargs)
 outputs = linrec.linrec(inputs, coeffs, reverse=False)
 ```
 
+## Repository Structure
+```
+├── eval
+│   ├── add_linrec_to_path.py                           # add root to path if not installed
+│   ├── bench.py                                        # benchmark implementations
+│   ├── debug.py                                        # call/debug kernels
+│   ├── test.py                                         # test implementations
+│   ├── tune.py                                         # tune configurations
+│   └── utils.py                                        # eval utilities
+├── linrec
+│   ├── impl
+│   │   ├── cuda
+│   │   │   ├── build.py                                # build system
+│   │   │   ├── cuhelpers.cuh                           # various cuda helpers
+│   │   │   ├── dispatch.h                              # dispatch features
+│   │   │   ├── executable.cpp                          # standalone executable
+│   │   │   ├── extension.cpp                           # pytorch extension
+│   │   │   ├── linrec.h                                # header files
+│   │   │   ├── linrec_pipe.cu                          # pipe host-side function
+│   │   │   ├── linrec_pipe.cuh                         # pipe kernel implementation
+│   │   │   ├── linrec_ref.cu                           # reference host-side function
+│   │   │   ├── linrec_ref.cuh                          # reference kernel implementation
+│   │   │   ├── linrec_tile.cu                          # tile host-side function 
+│   │   │   ├── linrec_tile.cuh                         # tile kernel implementation
+│   │   │   ├── memio.cuh                               # memory loading 
+│   │   │   └── ops.py                                  # cuda ops interface
+│   │   └── python
+│   │       └── ops.py                                  # python ops interface
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+└── setup.py
+```
+
 ## Setup
 
 

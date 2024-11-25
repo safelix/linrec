@@ -65,7 +65,7 @@ if __name__ == '__main__':
              'cutile': cuops.linrec_tile if (args.grad!='bwd') else cuops.linrec_tile_bwd,  
              'cupipe': cuops.linrec_pipe if (args.grad!='bwd') else cuops.linrec_pipe_bwd}
     stmts = {key:partial(stmt, reverse=args.reverse) for key, stmt in stmts.items()}
-    if args.grad is not None: # grad of add requires no computation
+    if args.grad is None: # grad of add requires no computation
         stmts['add'] = torch.add
     stmts['memio_limit'] = memio_limit
     

@@ -71,7 +71,7 @@ if __name__ == '__main__':
         configkeys.append(configkey)
         stmts.append(partial(func, **config))
 
-    #index, stmts = index[:2], stmts[:2]
+    assert len(configkeys) > 0
     index = pd.MultiIndex.from_frame(pd.DataFrame(configkeys))
     stmts = pd.Series(stmts, index=index)
 
@@ -125,7 +125,9 @@ if __name__ == '__main__':
     print(f'Max difference: {diffs.max(axis=None, skipna=True):.1e}')
 
     print('\n################## Benchmark ##################')
-    print(times.to_string(float_format=lambda x: f'{x:.1f}', max_rows=times.shape[0], max_cols=times.shape[1]))
+    float_format = (lambda x: f'{x:.1f}') if args.throughput else (lambda x: f'{x:.3f}')
+    print(times.to_string(float_format=float_format, max_rows=times.shape[0], max_cols=times.shape[1]))
 
     print('Max performance:')
-    print(maxperf.to_string(float_format=lambda x: f'{x:.1f}', max_rows=maxperf.shape[0], max_cols=maxperf.shape[1]))        
+    maxperf = pd.concat([maxperf.iloc[:-1], maxperf.iloc[-1:].map(float_format)]) # float format only last row
+    print(maxperf.to_string(float_format=lambda x: f'{x:.0f}', max_rows=maxperf.shape[0], max_cols=maxperf.shape[1]))        

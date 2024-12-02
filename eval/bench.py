@@ -43,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=12334567890, help='Seed to generate data with.')
     parser.add_argument('--device', type=int, default=0, help='Device id to benchmark on.')
     parser.add_argument('--showplots', action='store_true', help='Whether to show plots.')
+    parser.add_argument('--csv', action='store_true', help='Store results as CSV.')
     args = parser.parse_args()
 
     # Prepare Data Arguments
@@ -87,4 +88,12 @@ if __name__ == '__main__':
     )
 
     bench = execption2nan(warn=True)(bench)
-    Mark(bench, benchmark).run(show_plots=args.showplots, print_data=True, throughput=args.throughput)
+    times = Mark(bench, benchmark).run(return_df=True, show_plots=args.showplots, throughput=args.throughput)
+    times = times.set_index('seqlen')
+
+    if args.csv:
+        times.to_csv(f'bench_{'fwd' if args.grad is None else args.grad}{'_rev' if args.reverse else ''}.csv')
+
+    float_format = (lambda x: f'{x:.1f}') if args.throughput else (lambda x: f'{x:.3f}')
+    print(times.to_string(float_format=float_format, max_rows=times.shape[0], max_cols=times.shape[1]))
+

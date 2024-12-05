@@ -57,11 +57,7 @@ def scan_op(acc:tuple, curr:tuple):
     return accOut * currCoeff + currInp, accCoeff * currCoeff
 
 def linrec_hop_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
-    if reverse:
-        inputs, coeffs = inputs.flip(dims=[-1]), coeffs.flip(dims=[-1])
-    outputs, _ = associative_scan(scan_op, (inputs, coeffs), dim=-1)
-    if reverse:
-        outputs = outputs.flip(dims=[-1])
+    outputs, _ = associative_scan(scan_op, (inputs, coeffs), dim=-1, reverse=reverse)
     return outputs
 
 def linrec_hop_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse=False):

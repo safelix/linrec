@@ -41,11 +41,11 @@ def fake_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, 
 
 
 # CUDA Reference Implementations
-@torch.library.custom_op("linrec::curef_fwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_ref_fwd", mutates_args=(), device_types='cuda')
 def linrec_ref_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
     return _C.linrec_ref_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
 
-@torch.library.custom_op("linrec::curef_bwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_ref_bwd", mutates_args=(), device_types='cuda')
 def linrec_ref_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse:bool=False) -> Tuple[torch.Tensor, torch.Tensor]:
     return _C.linrec_ref_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=reverse)
 
@@ -56,17 +56,17 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     coeffs, outputs = ctx.saved_tensors
     d_inputs, d_coeffs = linrec_ref_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
-torch.library.register_autograd("linrec::curef_fwd", backward, setup_context=setup_context)
+torch.library.register_autograd("linreccuda::linrec_ref_fwd", backward, setup_context=setup_context)
 linrec_ref = linrec_ref_fwd
 
 
 
 # CUDA Tiled Implementations
-@torch.library.custom_op("linrec::cutile_fwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_tile_fwd", mutates_args=(), device_types='cuda')
 def linrec_tile_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
     return _C.linrec_tile_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
 
-@torch.library.custom_op("linrec::cutile_bwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_tile_bwd", mutates_args=(), device_types='cuda')
 def linrec_tile_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse:bool=False) -> Tuple[torch.Tensor, torch.Tensor]:
     return _C.linrec_tile_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=reverse)
 
@@ -77,16 +77,16 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     coeffs, outputs = ctx.saved_tensors
     d_inputs, d_coeffs = linrec_tile_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
-torch.library.register_autograd("linrec::cutile_fwd", backward, setup_context=setup_context)
+torch.library.register_autograd("linreccuda::linrec_tile_fwd", backward, setup_context=setup_context)
 linrec_tile = linrec_tile_fwd
 
 
 # CUDA Piped Implementations
-@torch.library.custom_op("linrec::cupipe_fwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_pipe_fwd", mutates_args=(), device_types='cuda')
 def linrec_pipe_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse:bool=False) -> torch.Tensor:
     return _C.linrec_pipe_fwd(inputs=inputs, coeffs=coeffs, reverse=reverse)
 
-@torch.library.custom_op("linrec::cupipe_bwd", mutates_args=(), device_types='cuda')
+@torch.library.custom_op("linreccuda::linrec_pipe_bwd", mutates_args=(), device_types='cuda')
 def linrec_pipe_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse:bool=False) -> Tuple[torch.Tensor, torch.Tensor]:
     return _C.linrec_pipe_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=reverse)
 
@@ -97,7 +97,7 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     coeffs, outputs = ctx.saved_tensors
     d_inputs, d_coeffs = linrec_pipe_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
-torch.library.register_autograd("linrec::cupipe_fwd", backward, setup_context=setup_context)
+torch.library.register_autograd("linreccuda::linrec_pipe_fwd", backward, setup_context=setup_context)
 linrec_pipe = linrec_pipe_fwd
 
 

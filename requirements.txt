@@ -6,7 +6,7 @@ nvidia-cuda-runtime-cu12
 ninja
 
 # Eval requires
-triton
+pytorch-triton
 numpy
 pandas
 matplotlib

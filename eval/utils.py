@@ -60,7 +60,7 @@ def memio_limit(seqlen, n_batches=1, n_channels=1, dtype=None, device=None, seed
     return ms, bytes
 
 
-def do_bench(fn, warmup=25, rep=100, grad_to_none=None, quantiles=None, fast_flush=True, return_mode="mean", device=None):
+def do_bench(fn, warmup=25, rep=100, grad_to_none=None, quantiles=None, return_mode="mean", device=None):
     """
     Benchmark the runtime of the provided function in miliseconds. By default, return the median runtime of 
     :code:`fn` along with the 20-th and 80-th performance percentile.
@@ -82,5 +82,5 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None, quantiles=None, fast_flu
     """
     import numpy as np
     with torch.cuda.device(device):
-        ms = triton.testing.do_bench(fn, warmup=warmup, rep=rep, grad_to_none=grad_to_none, quantiles=quantiles, fast_flush=fast_flush, return_mode=return_mode)
+        ms = triton.testing.do_bench(fn, warmup=warmup, rep=rep, grad_to_none=grad_to_none, quantiles=quantiles, return_mode=return_mode)
     return np.array(ms)

@@ -56,8 +56,7 @@ Tensor linrec_pipe_fwd(const Tensor &inputs, const Tensor &coeffs, const bool re
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
-        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int remainingElems, sequence needs to be shorter than 2147483647.");
-        TORCH_CHECK(inputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, sequence needs to be shorter than 2147483647.");
         TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerTile needs to be smaller than 65536.");
 
         // select kernel based on compile-time arguments 
@@ -137,8 +136,7 @@ std::tuple<Tensor, Tensor> linrec_pipe_bwd(const Tensor &d_outputs, const Tensor
 
         // check validity of inputs with respect to compile-time arguments
         static constexpr int kMaxElemsPerTile = kMaxElemsPerThread * kMaxThreadsPerBlock;
-        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int remainingElems, sequence needs to be shorter than 2147483647.");
-        TORCH_CHECK(d_outputs.numel() <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, numel() needs to be smaller than 2147483647.");
+        TORCH_CHECK(seqlen <= (1UL << 8*sizeof(int)-1)-1 && "For int tileBaseIdx, sequence needs to be shorter than 2147483647.");
         TORCH_CHECK(kMaxElemsPerTile <= (1UL << 8*sizeof(ushort)) && "For ushort indexing, kMaxElemsPerTile needs to be smaller than 65536.");
 
         // select kernel based on compile-time arguments 

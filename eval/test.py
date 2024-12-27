@@ -20,9 +20,13 @@ def test(stmt, ref, atol=None, **memargs):
     out = out if isinstance(out, torch.Tensor) else torch.stack(out)
     sol = sol if isinstance(sol, torch.Tensor) else torch.stack(sol)
 
-    if atol is None:
-        return (sol - out).abs().max().item()
-    return torch.allclose(sol, out, atol=atol)
+    diff = (sol - out).abs().max().item()
+    if atol is not None:
+        diff = torch.allclose(sol, out, atol=atol)
+
+    # overwrite memory to mitigate risk of spurious leaks between tests
+    out.fill_(torch.nan), sol.fill_(torch.nan) 
+    return diff
 
 
 if __name__ == '__main__':

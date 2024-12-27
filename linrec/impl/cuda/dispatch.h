@@ -17,7 +17,7 @@
         std::array{int(ScalarType::Float), 16},
         std::array{int(ScalarType::Int), 16},
         std::array{int(ScalarType::Int), 32},
-    }
+    };
 
     dispatch<CONFIG_LIST>(config, [&]<auto config>() {
         using T = typename NumToCppType<config[0]>;
@@ -68,7 +68,7 @@ inline void dispatch(auto config, auto &&func, std::string funcname,
   }
 
   TORCH_CHECK_NOT_IMPLEMENTED(false, "'", funcname, "' is not compiled for compile-time configuration [",
-                printConfig(config_names, config), "] (dispatch.h).")
+                printConfig(config_names, config), "] (dispatch.h).");
 }
 
 

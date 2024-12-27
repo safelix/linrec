@@ -201,7 +201,7 @@ linrec_tile_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     extern __shared__ kT smem[]; // smem[kMaxElemsPerThread * kMaxThreadsPerBlock];
 
     // Layout: dim=(X,L), strides=(L,1)
-    const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently in reverse: inputs[seqBaseIdx-i]
+    const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
     d_outputs = &d_outputs[seqBaseIdx];
     coeffs = &coeffs[seqBaseIdx];
     outputs = &outputs[seqBaseIdx];

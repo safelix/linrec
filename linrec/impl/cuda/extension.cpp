@@ -35,11 +35,11 @@ inline auto cast_kwarg(Ret (*f)(Arg...)) {
 // https://pytorch.org/tutorials/advanced/cpp_custom_ops.html
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("linrec_ref_fwd", torch::wrap_pybind_function(linrec_ref_fwd), 
-                "Reference CUDA imlplementation of linear recursion forward pass.",
+                "Reference CUDA implementation of linear recursion forward pass.",
                 py::arg("inputs"), py::arg("coeffs"), py::arg("reverse")=false);
 
     m.def("linrec_ref_bwd", torch::wrap_pybind_function(linrec_ref_bwd), 
-                "Reference CUDA imlplementation of linear recursion backward pass.",
+                "Reference CUDA implementation of linear recursion backward pass.",
                 py::arg("d_outputs"), py::arg("coeffs"), py::arg("outputs"), py::arg("reverse")=false);
 
     

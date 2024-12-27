@@ -16,10 +16,9 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
     coeffs = &coeffs[seqBaseIdx];
     outputs = &outputs[seqBaseIdx];
 
-    __shared__ kT seqAccOutput, seqAccCoeff; // for sequential accumulation between tiles
+    __shared__ kT seqAccOutput; // for sequential accumulation between tiles
     if (threadIdx.x == 0) {
         seqAccOutput = 0;
-        seqAccCoeff = 1;
     } __syncwarp(); // avoid divergence
 
     // Determine Tile Layout
@@ -48,18 +47,16 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
         // Compute parallel scan on a tile (=subsequence) that fits into one thread block 
         if (algocode >= 1) { // level 1,2,3 of block-wise parallel scan
 
-            // Combine seqAccOutput and and -Gate with first threadAccOutput and -Gate 
+            // Combine seqAccOutput with first threadAccOutput
             if (threadIdx.x == 0){
                 threadAccOutput[0] = seqAccOutput * threadAccCoeff[0] + threadAccOutput[0];
-                threadAccCoeff[0] =  seqAccCoeff * threadAccCoeff[0];
             } __syncthreads(); // avoid race condition
 
             _linrec_scan_tile_parallel_<kT, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccOutput, threadAccCoeff, kMaxElemsPerThread, numThreads);
         
-            // Store last threadAccOutput and -Gate into seqAccOutput and and -Gate
+            // Store last threadAccOutput into seqAccOutput
             if (threadIdx.x == numThreads-1) {
                 seqAccOutput = threadAccOutput[kMaxElemsPerThread-1];
-                seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid race condition
         }
 
@@ -82,10 +79,9 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
     d_inputs = &d_inputs[seqBaseIdx];
     d_coeffs = &d_coeffs[seqBaseIdx];
 
-    __shared__ kT seqAccOutput, seqAccCoeff; // for sequential accumulation between tiles
+    __shared__ kT seqAccDInput; // for sequential accumulation between tiles
     if (threadIdx.x == 0) {
-        seqAccOutput = 0;
-        seqAccCoeff = 1;
+        seqAccDInput = 0;
     } __syncwarp(); // avoid divergence
 
     // Determine Tile Layout
@@ -114,18 +110,16 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
         // Compute parallel scan on a tile (=subsequence) that fits into one thread block 
         if (algocode >= 1) { // level 1,2,3 of block-wise parallel scan
 
-            // Combine seqAccOutput and and -Gate with first threadAccDInput and -Gate 
+            // Combine seqAccDInput with first threadAccDInput 
             if (threadIdx.x == 0){
-                threadAccDInput[0] = seqAccOutput * threadAccCoeff[0] + threadAccDInput[0];
-                threadAccCoeff[0] =  seqAccCoeff * threadAccCoeff[0];
+                threadAccDInput[0] = seqAccDInput * threadAccCoeff[0] + threadAccDInput[0];
             } __syncthreads(); // avoid divergence
 
             _linrec_scan_tile_parallel_<kT, kMaxThreadsPerWarp, kMaxThreadsPerBlock, algocode>(threadAccDInput, threadAccCoeff, kMaxElemsPerThread, numThreads);
         
-            // Store last threadAccDInput and -Gate into seqAccOutput and and -Gate
+            // Store last threadAccDInput into seqAccDInput
             if (threadIdx.x == numThreads-1) {
-                seqAccOutput = threadAccDInput[kMaxElemsPerThread-1];
-                seqAccCoeff = threadAccCoeff[kMaxElemsPerThread-1];
+                seqAccDInput = threadAccDInput[kMaxElemsPerThread-1];
             } __syncthreads(); // avoid divergence
         }
 

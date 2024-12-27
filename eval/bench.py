@@ -4,6 +4,7 @@ from utils import execption2nan, meminit, memio, memio_limit, do_bench
 
 import add_linrec_to_path
 from linrec.impl.cuda import ops as cuops
+from linrec.impl.triton import ops as ttops
 from linrec.impl.python import ops as pyops
 
 
@@ -62,9 +63,12 @@ if __name__ == '__main__':
     # Prepare Statements
     stmts = {'pyref': pyops.linrec_ref if (args.grad!='bwd') else pyops.linrec_ref_bwd,
              'pyhop': pyops.linrec_hop if (args.grad!='bwd') else pyops.linrec_hop_bwd,  
-             'curef': cuops.linrec_ref if (args.grad!='bwd') else cuops.linrec_ref_bwd,  
+             'tttile': ttops.linrec_tile if (args.grad!='bwd') else ttops.linrec_tile_bwd,  
+             'ttpipe': ttops.linrec_pipe if (args.grad!='bwd') else ttops.linrec_pipe_bwd,
              'cutile': cuops.linrec_tile if (args.grad!='bwd') else cuops.linrec_tile_bwd,  
-             'cupipe': cuops.linrec_pipe if (args.grad!='bwd') else cuops.linrec_pipe_bwd}
+             'cupipe': cuops.linrec_pipe if (args.grad!='bwd') else cuops.linrec_pipe_bwd,
+             'curef': cuops.linrec_ref if (args.grad!='bwd') else cuops.linrec_ref_bwd,  
+             }
     stmts = {key:partial(stmt, reverse=args.reverse) for key, stmt in stmts.items()}
     if args.grad is None: # grad of add requires no computation
         stmts['add'] = torch.add

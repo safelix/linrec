@@ -4,6 +4,7 @@ from utils import execption2nan, meminit
 
 import add_linrec_to_path
 from linrec.impl.cuda import ops as cuops
+from linrec.impl.triton import ops as ttops
 from linrec.impl.python import ops as pyops
 
 def test(stmt, ref, atol=None, **memargs):
@@ -61,8 +62,8 @@ if __name__ == '__main__':
     
     # Prepare Statements
     stmts = {'pyref': pyops.linrec_ref,'pyhop': pyops.linrec_hop,  
-             'curef': cuops.linrec_ref, 'cutile': cuops.linrec_tile,  
-             'cupipe': cuops.linrec_pipe}
+             'tttile': ttops.linrec_tile, 'ttpipe': ttops.linrec_pipe,
+             'cutile': cuops.linrec_tile, 'cupipe': cuops.linrec_pipe, 'curef': cuops.linrec_ref}
     stmts = {key:partial(stmt, reverse=args.reverse) for key, stmt in stmts.items()}
 
     ref = partial(pyops.linrec_ref_fwd, reverse=args.reverse) 

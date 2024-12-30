@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_channels', type=int, default=100, help='Number of channels to benchmark with.')
     parser.add_argument('--reverse', action='store_true', help='Use reverse scan to benchmark with.')
     parser.add_argument('--throughput', action='store_true', help='Use throughput as a metric.')
+    parser.add_argument('--compile', action='store_true', help='Compile all statements to benchmark.')
     parser.add_argument('--seed', type=int, default=12334567890, help='Seed to generate data with.')
     parser.add_argument('--device', type=int, default=0, help='Device id to benchmark on.')
     parser.add_argument('--showplots', action='store_true', help='Whether to show plots.')
@@ -72,6 +73,9 @@ if __name__ == '__main__':
     stmts = {key:partial(stmt, reverse=args.reverse) for key, stmt in stmts.items()}
     if args.grad is None: # grad of add requires no computation
         stmts['add'] = torch.add
+    if args.compile:
+        #torch._inductor.config.min_split_scan_rblock = 64     # Minimum RBLOCK to be used for a TritonSplitScanKernel (not in 2.5.1 yet)
+        smts = {key:torch.compile(stmt, fullgraph=True, dynamic=False, mode='max-autotune') for key, stmt in stmts.items()}
     stmts['memio_limit'] = memio_limit
     
     # Execute one statment

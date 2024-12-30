@@ -12,9 +12,9 @@ linrec_pipe_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, int cons
 
     // Layout: dim=(X,L), strides=(L,1)
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
-    inputs = &inputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
+    inputs = &inputs[seqBaseIdx];               // get pointer to sequence
+    coeffs = &coeffs[seqBaseIdx];               // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];             // get pointer to sequence
 
     __shared__ kT seqAccOutput; // for sequential accumulation between tiles
     if (threadIdx.x == 0) {
@@ -73,11 +73,11 @@ linrec_pipe_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs,
 
     // Layout: dim=(X,L), strides=(L,1)
     const int seqBaseIdx = seqLen * blockIdx.x; // process sequences independently: inputs[seqBaseIdx+i]
-    d_outputs = &d_outputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
-    d_inputs = &d_inputs[seqBaseIdx];
-    d_coeffs = &d_coeffs[seqBaseIdx];
+    d_outputs = &d_outputs[seqBaseIdx];         // get pointer to sequence        
+    coeffs = &coeffs[seqBaseIdx];               // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];             // get pointer to sequence
+    d_inputs = &d_inputs[seqBaseIdx];           // get pointer to sequence
+    d_coeffs = &d_coeffs[seqBaseIdx];           // get pointer to sequence
 
     __shared__ kT seqAccDInput; // for sequential accumulation between tiles
     if (threadIdx.x == 0) {

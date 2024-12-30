@@ -9,10 +9,10 @@ template <typename kT>
 __global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    inputs = &inputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
+    int seqBaseIdx = seqLen * blockIdx.x;   // threads block process channels independently: inputs[seqBaseIdx + i]
+    inputs = &inputs[seqBaseIdx];           // get pointer to sequence
+    coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];         // get pointer to sequence
 
     // Linear Recursion
     outputs[0] = inputs[0];                         // set start element
@@ -25,12 +25,12 @@ template <typename kT>
 __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    d_outputs = &d_outputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
-    d_inputs = &d_inputs[seqBaseIdx];
-    d_coeffs = &d_coeffs[seqBaseIdx];
+    int seqBaseIdx = seqLen * blockIdx.x;   // threads block process channels independently: inputs[seqBaseIdx + i]
+    d_outputs = &d_outputs[seqBaseIdx];     // get pointer to sequence
+    coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];         // get pointer to sequence
+    d_inputs = &d_inputs[seqBaseIdx];       // get pointer to sequence
+    d_coeffs = &d_coeffs[seqBaseIdx];       // get pointer to sequence
 
     // Linear Backwards Recursion
     d_inputs[seqLen-1] = d_outputs[seqLen-1];       // set start d_input
@@ -54,10 +54,10 @@ template <typename kT>
 __global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* outputs, const int seqLen, const bool rev) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    inputs = &inputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
+    int seqBaseIdx = seqLen * blockIdx.x;   // threads block process channels independently: inputs[seqBaseIdx + i]
+    inputs = &inputs[seqBaseIdx];           // get pointer to sequence
+    coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];         // get pointer to sequence
 
     // Linear Recursion
     outputs[!rev ? 0 : (seqLen-1)] = inputs[!rev ? 0 : (seqLen-1)];     // set start element
@@ -72,12 +72,12 @@ template <typename kT>
 __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, const kT* outputs, kT* d_inputs, kT* d_coeffs, const int seqLen, const bool rev) {
     
     // Layout: dim=(numseq,seqLen), strides=(seqLen,1)
-    int seqBaseIdx = seqLen * blockIdx.x; // threads block process channels independently: inputs[seqBaseIdx + i]
-    d_outputs = &d_outputs[seqBaseIdx];
-    coeffs = &coeffs[seqBaseIdx];
-    outputs = &outputs[seqBaseIdx];
-    d_inputs = &d_inputs[seqBaseIdx];
-    d_coeffs = &d_coeffs[seqBaseIdx];
+    int seqBaseIdx = seqLen * blockIdx.x;   // threads block process channels independently: inputs[seqBaseIdx + i]
+    d_outputs = &d_outputs[seqBaseIdx];     // get pointer to sequence
+    coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
+    outputs = &outputs[seqBaseIdx];         // get pointer to sequence
+    d_inputs = &d_inputs[seqBaseIdx];       // get pointer to sequence
+    d_coeffs = &d_coeffs[seqBaseIdx];       // get pointer to sequence
 
     // Linear Backwards Recursion
     d_inputs[!rev ? (seqLen-1) : 0] = d_outputs[!rev ? (seqLen-1) : 0];                         // set start element

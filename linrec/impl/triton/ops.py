@@ -20,9 +20,9 @@ def linrec_tile_fwd_kernel(inputs, coeffs, outputs, seqLen, rev: tl.constexpr, t
 
     # Layout: dim=(X,L), strides=(L,1)
     seqBaseIdx = seqLen * tl.program_id(0)  # process sequences independently: inputs[seqBaseIdx+i]
-    inputs += seqBaseIdx
-    coeffs += seqBaseIdx
-    outputs += seqBaseIdx
+    inputs += seqBaseIdx                    # get pointer to sequence
+    coeffs += seqBaseIdx                    # get pointer to sequence
+    outputs += seqBaseIdx                   # get pointer to sequence
 
     idx = tl.arange(0, tileSize)  # constexpr/static vector to index within tile
     idx = idx if not rev else (seqLen-1 - idx) # reverse indices if needed
@@ -41,11 +41,11 @@ def linrec_tile_bwd_kernel(d_outputs, coeffs, outputs, d_inputs, d_coeffs, seqLe
 
     # Layout: dim=(X,L), strides=(L,1)
     seqBaseIdx = seqLen * tl.program_id(0)  # process sequences independently: inputs[seqBaseIdx+i]
-    d_outputs += seqBaseIdx
-    coeffs += seqBaseIdx
-    outputs += seqBaseIdx
-    d_inputs += seqBaseIdx
-    d_coeffs += seqBaseIdx
+    d_outputs += seqBaseIdx                 # get pointer to sequence
+    coeffs += seqBaseIdx                    # get pointer to sequence
+    outputs += seqBaseIdx                   # get pointer to sequence
+    d_inputs += seqBaseIdx                  # get pointer to sequence
+    d_coeffs += seqBaseIdx                  # get pointer to sequence
 
     idx = tl.arange(0, tileSize)  # constexpr/static vector to index within tile
     idx = (seqLen - 1 - idx) if not rev else idx # reverse indices for default backward
@@ -108,9 +108,9 @@ def linrec_tile(inputs: torch.Tensor, coeffs: torch.Tensor, reverse=False):
 def linrec_pipe_fwd_kernel(inputs, coeffs, outputs, seqLen, rev: tl.constexpr, tileSize: tl.constexpr):
     # Layout: dim=(X,L), strides=(L,1)
     seqBaseIdx = seqLen * tl.program_id(0)  # process sequences independently: inputs[seqBaseIdx+i]
-    inputs += seqBaseIdx
-    coeffs += seqBaseIdx
-    outputs += seqBaseIdx
+    inputs += seqBaseIdx                    # get pointer to sequence
+    coeffs += seqBaseIdx                    # get pointer to sequence
+    outputs += seqBaseIdx                   # get pointer to sequence
 
     seqAccOutput = 0.0
     first, last = (tl.arange(0, tileSize) == 0), (tl.arange(0, tileSize) == tileSize - 1)
@@ -138,11 +138,11 @@ def linrec_pipe_bwd_kernel(d_outputs, coeffs, outputs, d_inputs, d_coeffs, seqLe
 
     # Layout: dim=(X,L), strides=(L,1)
     seqBaseIdx = seqLen * tl.program_id(0)  # process sequences independently: inputs[seqBaseIdx+i]
-    d_outputs += seqBaseIdx
-    coeffs += seqBaseIdx
-    outputs += seqBaseIdx
-    d_inputs += seqBaseIdx
-    d_coeffs += seqBaseIdx
+    d_outputs += seqBaseIdx                 # get pointer to sequence
+    coeffs += seqBaseIdx                    # get pointer to sequence
+    outputs += seqBaseIdx                   # get pointer to sequence
+    d_inputs += seqBaseIdx                  # get pointer to sequence
+    d_coeffs += seqBaseIdx                  # get pointer to sequence
 
     seqAccDInputs = 0.0 # for sequential accumulation between tiles
     first, last = (tl.arange(0, tileSize) == 0), (tl.arange(0, tileSize) == tileSize - 1)

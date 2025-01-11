@@ -15,7 +15,7 @@ def bench(stmt, throughput=False, **memargs):
         ms, bytes = memio_limit(**memargs)
         return bytes / ms * 1e-6 if throughput else ms
 
-    data = meminit(**memargs)
+    data = memargs['meminit'](**memargs)
     if memargs['grad'] == 'autograd':
         data = (stmt(*data[0]), data[0], data[1])
         stmt = partial(torch.autograd.grad, retain_graph=True)
@@ -59,7 +59,8 @@ if __name__ == '__main__':
                 device=args.device,
                 seed=args.seed,
                 grad=args.grad,
-                fwd=cuops.linrec_ref_fwd if args.grad == 'bwd' else None)
+                fwd=cuops.linrec_ref_fwd if args.grad == 'bwd' else None,
+                meminit=meminit)
     
     # Prepare Statements
     stmts = {'pyref': pyops.linrec_ref if (args.grad!='bwd') else pyops.linrec_ref_bwd,

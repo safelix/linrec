@@ -9,7 +9,7 @@ from linrec.impl.python import ops as pyops
 
 def test(stmt, ref, atol=None, **memargs):
         
-    data = meminit(**memargs)
+    data = memargs['meminit'](**memargs)
     if memargs['grad'] == 'autograd':
         data, grad = data
     
@@ -58,7 +58,8 @@ if __name__ == '__main__':
                 dtype=torch.float32,
                 device=args.device,
                 seed=args.seed, 
-                grad=args.grad)
+                grad=args.grad,
+                meminit=meminit)
     
     # Prepare Statements
     stmts = {'pyref': pyops.linrec_ref,'pyhop': pyops.linrec_hop,  

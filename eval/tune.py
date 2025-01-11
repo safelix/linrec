@@ -1,6 +1,6 @@
 import torch
 from functools import partial
-from utils import execption2nan, memio_limit
+from utils import execption2nan, memio_limit, meminit
 from test import test
 from bench import bench
 
@@ -45,7 +45,8 @@ if __name__ == '__main__':
                 device=args.device,
                 seed=args.seed,
                 grad=None if args.fwd else 'bwd', 
-                fwd=cuops.linrec_ref_fwd)
+                fwd=cuops.linrec_ref_fwd, 
+                meminit=meminit)
     
     iolimit = [bench(memio_limit, throughput=args.throughput, **dict(seqlen=seqlen, **memargs)) for seqlen in seqlens]
     

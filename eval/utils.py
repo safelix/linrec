@@ -15,7 +15,7 @@ def execption2nan(warn=False):
     return decorator
 
 
-def meminit(seqlen, n_batches=1, n_channels=1, dtype=None, device=None, seed=None, grad=None, fwd=None):
+def meminit(seqlen, n_batches=1, n_channels=1, dtype=None, device=None, seed=None, grad=None, fwd=None, **_):
     size = (n_batches, n_channels, seqlen)
 
     device = torch.device('cuda') if device is None else device
@@ -45,7 +45,7 @@ def memio(stmt, data):
     data += (outputs, ) if isinstance(outputs, torch.Tensor) else tuple(outputs)
     return sum(t.numel() * t.element_size() for t in data if isinstance(t, torch.Tensor))
 
-def memio_limit(seqlen, n_batches=1, n_channels=1, dtype=None, device=None, seed=None, grad=None, fwd=None):
+def memio_limit(seqlen, n_batches=1, n_channels=1, dtype=None, device=None, grad=None, **_):
     #size = (n_batches, n_channels, seqlen)
     #tensor = torch.randn(size=size, dtype=dtype, device=device)
     #bytes = (3 if fwd else 5) * tensor.numel() * tensor.element_size()

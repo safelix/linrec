@@ -51,13 +51,14 @@ def linrec_ref(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
 
 
 ### Eager Higher-Order Op Implementations
-def scan_op(acc:tuple, curr:tuple):
-    accOut, accCoeff = acc
-    currInp, currCoeff = curr
-    return accOut * currCoeff + currInp, accCoeff * currCoeff
-
 def linrec_hop_fwd(inputs:torch.Tensor, coeffs:torch.Tensor, reverse=False):
-    outputs, _ = associative_scan(scan_op, (inputs, coeffs), dim=-1, reverse=reverse)
+
+    def op(acc:dict, curr:dict):
+        x = curr['c'] * acc['x']  + curr['x']
+        c = acc['c'] * curr['c']
+        return dict(x=x, c=c)
+    
+    outputs = associative_scan(op, dict(x=inputs, c=coeffs), dim=-1, reverse=reverse)['x']
     return outputs
 
 def linrec_hop_bwd(d_outputs:torch.Tensor, coeffs:torch.Tensor, outputs:torch.Tensor, reverse=False):

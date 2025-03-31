@@ -4,7 +4,7 @@
 #include <cuhelpers.cuh>
 
 /* 
-A parallel scan for a fixed-length linear recursion: `outputs[i] = outputs[i - 1] * coeffs[i] + inputs[i];`
+A parallel scan for a fixed-length linear recurrence: `outputs[i] = outputs[i - 1] * coeffs[i] + inputs[i];`
 Every thread is assumed to receive a different partition of the inputs/coeffs in `threadAccOutput` and
 `threadAccCoeff` according to its threadId. The accumulation happens in three levels:
     1. Each thread accumulates threadSeqLen states/coeffs locally.

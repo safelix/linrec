@@ -35,22 +35,22 @@ inline auto cast_kwarg(Ret (*f)(Arg...)) {
 // https://pytorch.org/tutorials/advanced/cpp_custom_ops.html
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("linrec_ref_fwd", torch::wrap_pybind_function(linrec_ref_fwd), 
-                "Reference CUDA implementation of linear recursion forward pass.",
+                "Reference CUDA implementation of linear recurrence forward pass.",
                 py::arg("inputs"), py::arg("coeffs"), py::arg("reverse")=false);
 
     m.def("linrec_ref_bwd", torch::wrap_pybind_function(linrec_ref_bwd), 
-                "Reference CUDA implementation of linear recursion backward pass.",
+                "Reference CUDA implementation of linear recurrence backward pass.",
                 py::arg("d_outputs"), py::arg("coeffs"), py::arg("outputs"), py::arg("reverse")=false);
 
     
     m.attr("config_list") = py::cast(CONFIG_LIST); // potentially not unique!
     m.attr("config_names") = py::cast(CONFIG_NAMES);
     m.def("linrec_tile_fwd", torch::wrap_pybind_function(cast_kwarg(linrec_tile_fwd)), 
-                "Parallel CUDA implementation of linear recursion forward pass.",
+                "Parallel CUDA implementation of linear recurrence forward pass.",
                 py::arg("inputs"), py::arg("coeffs"), py::arg("reverse")=false);
 
     m.def("linrec_tile_bwd", torch::wrap_pybind_function(cast_kwarg(linrec_tile_bwd)), 
-                "Parallel CUDA implementation of linear recursion backward pass.",
+                "Parallel CUDA implementation of linear recurrence backward pass.",
                 py::arg("d_outputs"), py::arg("coeffs"), py::arg("outputs"), py::arg("reverse")=false);
 
     m.def("linrec_tile_attrs", torch::wrap_pybind_function(cast_kwarg(linrec_tile_attrs)), 
@@ -59,11 +59,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
                 
 
     m.def("linrec_pipe_fwd", torch::wrap_pybind_function(cast_kwarg(linrec_pipe_fwd)), 
-                "Parallel CUDA implementation of linear recursion forward pass.",
+                "Parallel CUDA implementation of linear recurrence forward pass.",
                 py::arg("inputs"), py::arg("coeffs"), py::arg("reverse")=false);
  
     m.def("linrec_pipe_bwd", torch::wrap_pybind_function(cast_kwarg(linrec_pipe_bwd)), 
-                "Parallel CUDA implementation of linear recursion backward pass.",
+                "Parallel CUDA implementation of linear recurrence backward pass.",
                 py::arg("d_outputs"), py::arg("coeffs"), py::arg("outputs"), py::arg("reverse")=false);
     
     m.def("linrec_pipe_attrs", torch::wrap_pybind_function(cast_kwarg(linrec_pipe_attrs)), 

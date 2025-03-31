@@ -14,7 +14,7 @@ __global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* ou
     coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
     outputs = &outputs[seqBaseIdx];         // get pointer to sequence
 
-    // Linear Recursion
+    // Linear Recurrence
     outputs[0] = inputs[0];                         // set start element
     for(int i = 1; i < seqLen; i++) {               // linear scan
         outputs[i] = outputs[i-1] * coeffs[i] + inputs[i];
@@ -32,7 +32,7 @@ __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, con
     d_inputs = &d_inputs[seqBaseIdx];       // get pointer to sequence
     d_coeffs = &d_coeffs[seqBaseIdx];       // get pointer to sequence
 
-    // Linear Backwards Recursion
+    // Linear Backwards Recurrence
     d_inputs[seqLen-1] = d_outputs[seqLen-1];       // set start d_input
     for(int i = seqLen-2; i >= 0; i--) {            // linear scan
         d_inputs[i] = d_inputs[i+1] * coeffs[i+1] + d_outputs[i];
@@ -59,7 +59,7 @@ __global__ void linrec_ref_fwd_kernel(const kT* inputs, const kT* coeffs, kT* ou
     coeffs = &coeffs[seqBaseIdx];           // get pointer to sequence
     outputs = &outputs[seqBaseIdx];         // get pointer to sequence
 
-    // Linear Recursion
+    // Linear Recurrence
     outputs[!rev ? 0 : (seqLen-1)] = inputs[!rev ? 0 : (seqLen-1)];     // set start element
     
     
@@ -79,7 +79,7 @@ __global__ void linrec_ref_bwd_kernel(const kT* d_outputs, const kT* coeffs, con
     d_inputs = &d_inputs[seqBaseIdx];       // get pointer to sequence
     d_coeffs = &d_coeffs[seqBaseIdx];       // get pointer to sequence
 
-    // Linear Backwards Recursion
+    // Linear Backwards Recurrence
     d_inputs[!rev ? (seqLen-1) : 0] = d_outputs[!rev ? (seqLen-1) : 0];                         // set start element
 
     for(int i = !rev ? (seqLen-2):1; !rev ? (0<=i):(i<seqLen); i -= !rev ? 1:-1) {          // linear scan

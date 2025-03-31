@@ -7,3 +7,10 @@ requires = [
     "nvidia-cuda-runtime-cu12"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 130
+[tool.ruff.format]
+quote-style = "single"
+[tool.ruff.lint.isort]
+combine-as-imports = true

@@ -42,6 +42,7 @@ outputs = linrec.linrec(inputs, coeffs, reverse=False)
 
 ## Setup
 
+For an installation without CUDA implementation, no build environment is required. 
 
 ### Build Tools
 

@@ -4,9 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import sys, warnings
+import os, sys, warnings
 from pathlib import Path
 from setuptools import find_packages, setup
+from torch.cuda import is_available as cuda_is_available
 from torch.utils.cpp_extension import CUDAExtension, BuildExtension, CUDA_HOME
 
 library_name = "linrec"
@@ -15,6 +16,9 @@ library_name = "linrec"
 def get_extensions():
     if CUDA_HOME is None:
         warnings.warn("NVCC not found, linrec.impl.cuda will not be installed.")
+        return []
+    if not cuda_is_available() and 'TORCH_CUDA_ARCH_LIST' not in os.environ:
+        warnings.warn("No CUDA targets found, linrec.impl.cuda will not be installed.")
         return []
 
     # build.py is also a module: python -m linrec.impl.cuda.build

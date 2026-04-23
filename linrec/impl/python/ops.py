@@ -58,6 +58,7 @@ class LinrecRefFn(Function):
 
 
 def linrec_ref(inputs:torch.Tensor, coeffs:torch.Tensor, logc=False, dim=-1, reverse=False):
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
     return LinrecRefFn.apply(inputs, coeffs, logc, dim, reverse)
 
 
@@ -107,4 +108,5 @@ class LinrecHopFn(Function):
 
 
 def linrec_hop(inputs:torch.Tensor, coeffs:torch.Tensor, logc=False, dim=-1, reverse=False):
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
     return LinrecHopFn.apply(inputs, coeffs, logc, dim, reverse)

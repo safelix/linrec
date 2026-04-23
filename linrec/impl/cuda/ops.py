@@ -57,7 +57,10 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     d_inputs, d_coeffs = linrec_ref_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
 torch.library.register_autograd("linreccuda::linrec_ref_fwd", backward, setup_context=setup_context)
-linrec_ref = linrec_ref_fwd
+
+def linrec_ref(inputs: torch.Tensor, coeffs: torch.Tensor, reverse: bool = False) -> torch.Tensor:
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
+    return linrec_ref_fwd(inputs, coeffs, reverse)
 
 
 
@@ -78,7 +81,10 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     d_inputs, d_coeffs = linrec_tile_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
 torch.library.register_autograd("linreccuda::linrec_tile_fwd", backward, setup_context=setup_context)
-linrec_tile = linrec_tile_fwd
+
+def linrec_tile(inputs: torch.Tensor, coeffs: torch.Tensor, reverse: bool = False) -> torch.Tensor:
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
+    return linrec_tile_fwd(inputs, coeffs, reverse)
 
 
 # CUDA Piped Implementations
@@ -98,7 +104,10 @@ def backward(ctx:FunctionCtx, d_outputs:torch.Tensor) -> Tuple[torch.Tensor, tor
     d_inputs, d_coeffs = linrec_pipe_bwd(d_outputs=d_outputs, coeffs=coeffs, outputs=outputs, reverse=ctx.reverse)
     return d_inputs, d_coeffs, None
 torch.library.register_autograd("linreccuda::linrec_pipe_fwd", backward, setup_context=setup_context)
-linrec_pipe = linrec_pipe_fwd
+
+def linrec_pipe(inputs: torch.Tensor, coeffs: torch.Tensor, reverse: bool = False) -> torch.Tensor:
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
+    return linrec_pipe_fwd(inputs, coeffs, reverse)
 
 
 

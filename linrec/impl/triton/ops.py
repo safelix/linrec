@@ -98,6 +98,7 @@ class LinrecTileFn(Function):
         return d_inputs, d_coeffs, None
 
 def linrec_tile(inputs: torch.Tensor, coeffs: torch.Tensor, reverse=False):
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
     return LinrecTileFn.apply(inputs, coeffs, reverse)
 
 
@@ -201,4 +202,5 @@ class LinrecPipeFn(Function):
         return d_inputs, d_coeffs, None
 
 def linrec_pipe(inputs: torch.Tensor, coeffs: torch.Tensor, reverse=False):
+    inputs, coeffs = torch.broadcast_tensors(inputs, coeffs)
     return LinrecPipeFn.apply(inputs, coeffs, reverse)
